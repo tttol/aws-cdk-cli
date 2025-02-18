@@ -185,13 +185,17 @@ const repo = configureProject(
   }),
 );
 
+interface GenericProps {
+  private?: boolean;
+}
+
 /**
  * Generic CDK props
  *
  * Must be a function because the structures of jestConfig will be mutated
  * in-place inside projen
  */
-function genericCdkProps() {
+function genericCdkProps(props: GenericProps = {}) {
   return {
     keywords: ['aws', 'cdk'],
     homepage: 'https://github.com/aws/aws-cdk',
@@ -213,6 +217,10 @@ function genericCdkProps() {
       },
     },
     typescriptVersion: TYPESCRIPT_VERSION,
+    checkLicenses: props.private ? undefined : {
+      allow: ['Apache-2.0', 'MIT', 'ISC']
+    },
+    ...props,
   } satisfies Partial<yarn.TypeScriptWorkspaceOptions>;
 }
 
@@ -344,8 +352,9 @@ const cxApi = overrideEslint(
 
 const yarnCling = configureProject(
   new yarn.TypeScriptWorkspace({
-    ...genericCdkProps(),
-    private: true,
+    ...genericCdkProps({
+      private: true,
+    }),
     parent: repo,
     name: '@aws-cdk/yarn-cling',
     description: 'Tool for generating npm-shrinkwrap from yarn.lock',
@@ -360,8 +369,9 @@ yarnCling.testTask.prependExec('ln -sf ../../cdk test/test-fixture/jsii/node_mod
 
 const yargsGen = configureProject(
   new yarn.TypeScriptWorkspace({
-    ...genericCdkProps(),
-    private: true,
+    ...genericCdkProps({
+      private: true,
+    }),
     parent: repo,
     name: '@aws-cdk/user-input-gen',
     description: 'Generate CLI arguments',
@@ -376,8 +386,9 @@ const yargsGen = configureProject(
 
 const nodeBundle = configureProject(
   new yarn.TypeScriptWorkspace({
-    ...genericCdkProps(),
-    private: true,
+    ...genericCdkProps({
+      private: true,
+    }),
     parent: repo,
     name: '@aws-cdk/node-bundle',
     description: 'Tool for generating npm-shrinkwrap from yarn.lock',
@@ -393,8 +404,9 @@ nodeBundle.eslint?.addRules({ 'no-console': ['off'] });
 // This should be deprecated, but only after the move
 const cdkBuildTools = configureProject(
   new yarn.TypeScriptWorkspace({
-    ...genericCdkProps(),
-    private: true,
+    ...genericCdkProps({
+      private: true,
+    }),
     parent: repo,
     name: '@aws-cdk/cdk-build-tools',
     description: 'Build tools for CDK packages',
@@ -421,8 +433,9 @@ const cdkBuildTools = configureProject(
 // This should be deprecated, but only after the move
 const cliPluginContract = configureProject(
   new yarn.TypeScriptWorkspace({
-    ...genericCdkProps(),
-    private: true,
+    ...genericCdkProps({
+      private: true,
+    }),
     parent: repo,
     name: '@aws-cdk/cli-plugin-contract',
     description: 'Contract between the CLI and authentication plugins, for the exchange of AWS credentials',
@@ -881,11 +894,12 @@ const TOOLKIT_LIB_EXCLUDE_PATTERNS = [
 
 const toolkitLib = configureProject(
   new yarn.TypeScriptWorkspace({
-    ...genericCdkProps(),
+    ...genericCdkProps({
+      private: true,
+    }),
     parent: repo,
     name: '@aws-cdk/toolkit',
     description: 'AWS CDK Programmatic Toolkit Library',
-    private: true,
     srcdir: 'lib',
     deps: [
       cloudAssemblySchema,
@@ -1032,9 +1046,10 @@ toolkitLib.addTask('publish-local', {
 
 const cdkCliWrapper = configureProject(
   new yarn.TypeScriptWorkspace({
-    ...genericCdkProps(),
+    ...genericCdkProps({
+      private: true,
+    }),
     parent: repo,
-    private: true,
     name: '@aws-cdk/cdk-cli-wrapper',
     description: 'CDK CLI Wrapper Library',
     srcdir: 'lib',
