@@ -181,6 +181,12 @@ const repoProject = new yarn.Monorepo({
     releaseTrigger: pj.release.ReleaseTrigger.workflowDispatch(),
   },
 
+  depsUpgradeOptions: {
+    workflowOptions: {
+      schedule: pj.javascript.UpgradeDependenciesSchedule.WEEKLY,
+    },
+  },
+
   githubOptions: {
     mergify: false,
     mergeQueue: true,
