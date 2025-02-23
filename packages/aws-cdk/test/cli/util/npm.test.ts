@@ -3,18 +3,18 @@ import { checkIfDeprecated } from '../../../lib/cli/util/npm';
 jest.mock('util', () => {
   const mockExec = jest.fn();
   const format = jest.fn((fmt, ...args) => {
-    return [fmt, ...args].join(' '); // Simplistic string formatting
+    return [fmt, ...args].join(' ');
   });
   return {
     promisify: jest.fn(() => mockExec),
-    __mockExec: mockExec, // Expose the mockExec for dynamic manipulation
-    format, // Add the mock for util.format
+    __mockExec: mockExec, 
+    format,
   };
 });
 
 const { __mockExec: mockedExec } = jest.requireMock('util');
 
-describe('npm utilities', () => {
+describe('npm.ts', () => {
   beforeEach(() => {
     jest.resetAllMocks();
   });
