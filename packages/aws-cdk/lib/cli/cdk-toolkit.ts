@@ -1,15 +1,14 @@
-import * as path from 'path';
-import { format } from 'util';
 import * as cxapi from '@aws-cdk/cx-api';
 import * as chalk from 'chalk';
 import * as chokidar from 'chokidar';
 import * as fs from 'fs-extra';
+import * as path from 'path';
 import * as promptly from 'promptly';
+import { format } from 'util';
 import * as uuid from 'uuid';
-import { Configuration, PROJECT_CONFIG } from './user-configuration';
 import { DEFAULT_TOOLKIT_STACK_NAME } from '../api';
 import { SdkProvider } from '../api/aws-auth';
-import { Bootstrapper, BootstrapEnvironmentOptions } from '../api/bootstrap';
+import { BootstrapEnvironmentOptions, Bootstrapper } from '../api/bootstrap';
 import {
   CloudAssembly,
   DefaultSelection,
@@ -19,37 +18,37 @@ import {
 } from '../api/cxapp/cloud-assembly';
 import { CloudExecutable } from '../api/cxapp/cloud-executable';
 import { environmentsFromDescriptors, globEnvironmentsFromStacks, looksLikeGlob } from '../api/cxapp/environments';
-import { type Deployments, DeploymentMethod, SuccessfulDeployStackResult, createDiffChangeSet } from '../api/deployments';
+import { createDiffChangeSet, DeploymentMethod, SuccessfulDeployStackResult, type Deployments } from '../api/deployments';
 import { GarbageCollector } from '../api/garbage-collection/garbage-collector';
-import { HotswapMode, HotswapPropertyOverrides, EcsHotswapProperties } from '../api/hotswap/common';
+import { EcsHotswapProperties, HotswapMode, HotswapPropertyOverrides } from '../api/hotswap/common';
 import { findCloudWatchLogGroups } from '../api/logs/find-cloudwatch-logs';
 import { CloudWatchLogEventMonitor } from '../api/logs/logs-monitor';
-import { ResourceImporter, removeNonImportResources, ResourceMigrator } from '../api/resource-import';
+import { removeNonImportResources, ResourceImporter, ResourceMigrator } from '../api/resource-import';
 import { StackActivityProgress } from '../api/stack-events';
 import { tagsForStack, type Tag } from '../api/tags';
 import { type AssetBuildNode, type AssetPublishNode, type Concurrency, type StackNode, type WorkGraph } from '../api/work-graph';
 import { WorkGraphBuilder } from '../api/work-graph/work-graph-builder';
 import {
+  appendWarningsToReadme,
+  buildCfnClient,
+  buildGenertedTemplateOutput,
+  CfnTemplateGeneratorProvider,
+  FromScan,
   generateCdkApp,
   generateStack,
+  generateTemplate,
+  GenerateTemplateOutput,
+  isThereAWarning,
+  parseSourceOptions,
   readFromPath,
   readFromStack,
   setEnvironment,
-  parseSourceOptions,
-  generateTemplate,
-  FromScan,
   TemplateSourceOptions,
-  GenerateTemplateOutput,
-  CfnTemplateGeneratorProvider,
   writeMigrateJsonFile,
-  buildGenertedTemplateOutput,
-  appendWarningsToReadme,
-  isThereAWarning,
-  buildCfnClient,
 } from '../commands/migrate';
 import { printSecurityDiff, printStackDiff, RequireApproval } from '../diff';
 import { listStacks } from '../list-stacks';
-import { result as logResult, debug, error, highlight, info, success, warning } from '../logging';
+import { debug, error, highlight, info, result as logResult, success, warning } from '../logging';
 import { CliIoHost } from '../toolkit/cli-io-host';
 import { ToolkitError } from '../toolkit/error';
 import { numberFromBool, partition } from '../util';
@@ -57,6 +56,7 @@ import { validateSnsTopicArn } from '../util/cloudformation';
 import { formatErrorMessage } from '../util/format-error';
 import { deserializeStructure, obscureTemplate, serializeStructure } from '../util/serialize';
 import { formatTime } from '../util/string-manipulation';
+import { Configuration, PROJECT_CONFIG } from './user-configuration';
 
 // Must use a require() otherwise esbuild complains about calling a namespace
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -404,20 +404,7 @@ export class CdkToolkit {
         }
       }
 
-      // Following are the same semantics we apply with respect to Notification ARNs (dictated by the SDK)
-      //
-      //  - undefined  =>  cdk ignores it, as if it wasn't supported (allows external management).
-      //  - []:        =>  cdk manages it, and the user wants to wipe it out.
-      //  - ['arn-1']  =>  cdk manages it, and the user wants to set it to ['arn-1'].
-      const notificationArns = (!!options.notificationArns || !!stack.notificationArns)
-        ? (options.notificationArns ?? []).concat(stack.notificationArns ?? [])
-        : undefined;
-
-      for (const notificationArn of notificationArns ?? []) {
-        if (!validateSnsTopicArn(notificationArn)) {
-          throw new ToolkitError(`Notification arn ${notificationArn} is not a valid arn for an SNS topic`);
-        }
-      }
+      const notificationArns = getValidNotificationArns(options.notificationArns, stack.notificationArns);
 
       const stackIndex = stacks.indexOf(stack) + 1;
       info(`${chalk.bold(stack.displayName)}: deploying... [${stackIndex}/${stackCollection.stackCount}]`);
@@ -766,6 +753,8 @@ export class CdkToolkit {
 
     highlight(stack.displayName);
 
+    const notificationArns = getValidNotificationArns(options.notificationArns, stack.notificationArns);
+
     const resourceImporter = new ResourceImporter(stack, {
       deployments: this.props.deployments,
       ioHost: this.ioHost,
@@ -812,6 +801,7 @@ export class CdkToolkit {
       usePreviousParameters: true,
       progress: options.progress,
       rollback: options.rollback,
+      notificationArns: notificationArns,
     });
 
     // Notify user of next steps
@@ -1654,6 +1644,11 @@ export interface RollbackOptions {
 
 export interface ImportOptions extends CfnDeployOptions {
   /**
+   * ARNs of SNS topics that CloudFormation will notify with stack related events
+   */
+  notificationArns?: string[];
+    
+  /**
    * Build a physical resource mapping and write it to the given file, without performing the actual import operation
    *
    * @default - No file
@@ -1906,4 +1901,27 @@ function stackMetadataLogger(verbose?: boolean): (level: 'info' | 'error' | 'war
       logFn(`  ${msg.entry.trace.join('\n  ')}`);
     }
   };
+}
+
+/**
+ * Following are the same semantics we apply with respect to Notification ARNs (dictated by the SDK)
+ *
+ * - undefined  =>  cdk ignores it, as if it wasn't supported (allows external management).
+ * - []         =>  cdk manages it, and the user wants to wipe it out.
+ * - ['arn-1']  =>  cdk manages it, and the user wants to set it to ['arn-1'].
+ * 
+ * @param arnsInOptions Notification ARNs specified in options
+ * @param arnsInStack Notification ARNs specified in stack
+ */
+function getValidNotificationArns(arnsInOptions: string[] | undefined, arnsInStack: string[] | undefined): string[] | undefined {
+  const notificationArns = (!!arnsInOptions || !!arnsInStack)
+    ? (arnsInOptions ?? []).concat(arnsInStack ?? [])
+    : undefined;
+
+  for (const notificationArn of notificationArns ?? []) {
+    if (!validateSnsTopicArn(notificationArn)) {
+      throw new ToolkitError(`Notification arn ${notificationArn} is not a valid arn for an SNS topic`);
+    }
+  }
+  return notificationArns;
 }

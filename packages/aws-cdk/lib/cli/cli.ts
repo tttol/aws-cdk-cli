@@ -1,11 +1,10 @@
 import * as cxapi from '@aws-cdk/cx-api';
 import '@jsii/check-node/run';
 import * as chalk from 'chalk';
-import { CdkToolkit, AssetBuildTime } from './cdk-toolkit';
+import { AssetBuildTime, CdkToolkit } from './cdk-toolkit';
 import { parseCommandLineArguments } from './parse-command-line-arguments';
 import { checkForPlatformWarnings } from './platform-warnings';
 
-import * as version from './version';
 import { SdkProvider } from '../api/aws-auth';
 import { SdkToCliLogger } from '../api/aws-auth/sdk-logger';
 import { setSdkTracing } from '../api/aws-auth/tracing';
@@ -13,7 +12,7 @@ import { BootstrapSource, Bootstrapper } from '../api/bootstrap';
 import { StackSelector } from '../api/cxapp/cloud-assembly';
 import { CloudExecutable, Synthesizer } from '../api/cxapp/cloud-executable';
 import { execProgram } from '../api/cxapp/exec';
-import { Deployments, DeploymentMethod } from '../api/deployments';
+import { DeploymentMethod, Deployments } from '../api/deployments';
 import { HotswapMode } from '../api/hotswap/common';
 import { PluginHost } from '../api/plugin';
 import { Settings } from '../api/settings';
@@ -24,11 +23,12 @@ import { docs } from '../commands/docs';
 import { doctor } from '../commands/doctor';
 import { getMigrateScanType } from '../commands/migrate';
 import { cliInit, printAvailableTemplates } from '../init';
-import { result, debug, error, info } from '../logging';
+import { debug, error, info, result } from '../logging';
 import { Notices } from '../notices';
-import { Command, Configuration } from './user-configuration';
-import { IoMessageLevel, CliIoHost } from '../toolkit/cli-io-host';
+import { CliIoHost, IoMessageLevel } from '../toolkit/cli-io-host';
 import { ToolkitError } from '../toolkit/error';
+import { Command, Configuration } from './user-configuration';
+import * as version from './version';
 
 /* eslint-disable max-len */
 /* eslint-disable @typescript-eslint/no-shadow */ // yargs
@@ -387,6 +387,7 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
         ioHost.currentAction = 'import';
         return cli.import({
           selector,
+          notificationArns: args.notificationArns,
           toolkitStackName,
           roleArn: args.roleArn,
           deploymentMethod: {

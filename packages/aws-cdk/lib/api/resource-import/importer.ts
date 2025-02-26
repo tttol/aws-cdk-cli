@@ -1,14 +1,14 @@
-import { format } from 'util';
 import * as cfnDiff from '@aws-cdk/cloudformation-diff';
 import { ResourceDifference } from '@aws-cdk/cloudformation-diff';
 import * as cxapi from '@aws-cdk/cx-api';
 import * as chalk from 'chalk';
 import * as fs from 'fs-extra';
 import * as promptly from 'promptly';
+import { format } from 'util';
 import { error, info, warn } from '../../cli/messages';
 import { IIoHost, ToolkitAction } from '../../toolkit/cli-io-host';
 import { ToolkitError } from '../../toolkit/error';
-import { assertIsSuccessfulDeployStackResult, type Deployments, DeploymentMethod, ResourceIdentifierProperties, ResourcesToImport } from '../deployments';
+import { assertIsSuccessfulDeployStackResult, DeploymentMethod, ResourceIdentifierProperties, ResourcesToImport, type Deployments } from '../deployments';
 import type { StackActivityProgress } from '../stack-events';
 import type { Tag } from '../tags';
 
@@ -19,6 +19,11 @@ export interface ResourceImporterProps {
 }
 
 export interface ImportDeploymentOptions {
+  /**
+   * ARNs of SNS topics that CloudFormation will notify with stack related events
+   */
+  notificationArns?: string[];
+    
   /**
    * Role to pass to CloudFormation for deployment
    *
