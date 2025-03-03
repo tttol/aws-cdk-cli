@@ -1,15 +1,17 @@
-import { Monorepo } from "cdklabs-projen-project-types/lib/yarn";
-import { Component, github } from "projen";
-import { JobPermission } from "projen/lib/github/workflows-model";
+import { Monorepo } from 'cdklabs-projen-project-types/lib/yarn';
+import { Component, github } from 'projen';
+import { JobPermission } from 'projen/lib/github/workflows-model';
 
 export class AdcPublishing extends Component {
   constructor(private readonly project_: Monorepo) {
     super(project_);
-
-    this.project.tasks.tryFind('build')?.exec('tsx projenrc/build-standalone-zip.task.ts');
   }
 
   public preSynthesize() {
+    for (const taskName of ['build', 'release']) {
+      this.project.tasks.tryFind(taskName)?.exec('tsx projenrc/build-standalone-zip.task.ts');
+    }
+
     const releaseWf = this.project_.github?.tryFindWorkflow('release');
     if (!releaseWf) {
       throw new Error('Could not find release workflow');
@@ -22,20 +24,22 @@ export class AdcPublishing extends Component {
       with: {
         name: 'standalone_build-artifact',
         path: 'dist/standalone',
-        overwrite: true
+        overwrite: true,
       },
     });
 
     releaseWf.addJob('standalone_release_adc', {
       name: 'standalone: publish to ADC',
-      environment: 'releasing',  // <-- this has the configuration
+      environment: 'releasing', // <-- this has the configuration
       needs: ['release'],
       runsOn: ['ubuntu-latest'],
       permissions: {
         contents: JobPermission.WRITE,
+        idToken: JobPermission.WRITE,
       },
-      if: `\${{ needs.release.outputs.latest_commit == github.sha }}`,
+      if: '${{ needs.release.outputs.latest_commit == github.sha }}',
       steps: [
+        github.WorkflowSteps.checkout(),
         {
           uses: 'actions/setup-node@v4',
           with: {
@@ -56,10 +60,10 @@ export class AdcPublishing extends Component {
           uses: 'aws-actions/configure-aws-credentials@v4',
           with: {
             'aws-region': 'us-east-1',
-            'role-duration-seconds': 14400,
             'role-to-assume': '${{ vars.AWS_ROLE_TO_ASSUME_FOR_ACCOUNT }}',
-            'role-session-name': 'releasing@aws-cdk-cli',
+            'role-session-name': 'standalone-release@aws-cdk-cli',
             'output-credentials': true,
+            'mask-aws-account-id': true,
           },
         },
         {
