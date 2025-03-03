@@ -11,7 +11,6 @@ import { latestVersionIfHigher, VersionCheckTTL, displayVersionMessage, isDevelo
 
 jest.setTimeout(10_000);
 
-
 const setTimeout = promisify(_setTimeout);
 
 function tmpfile(): string {

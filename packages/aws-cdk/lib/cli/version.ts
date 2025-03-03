@@ -1,13 +1,13 @@
 /* istanbul ignore file */
+import * as path from 'path';
 import * as chalk from 'chalk';
 import * as fs from 'fs-extra';
-import * as path from 'path';
 import * as semver from 'semver';
 import { debug, info } from '../logging';
 import { ToolkitError } from '../toolkit/error';
-import { cdkCacheDir, rootDir } from '../util/directories';
 import { formatAsBanner } from './util/console-formatters';
-import { checkIfDeprecated, getLatestVersionFromNpm } from './util/npm';
+import { cdkCacheDir, rootDir } from '../util/directories';
+import { getLatestVersionFromNpm } from './util/npm';
 
 const ONE_DAY_IN_SECONDS = 1 * 24 * 60 * 60;
 
@@ -106,11 +106,8 @@ function getMajorVersionUpgradeMessage(currentVersion: string): string | void {
   }
 }
 
-async function getVersionMessage(currentVersion: string, laterVersion: string): Promise<string[]> {
-  const deprecationMessage = await checkIfDeprecated(currentVersion);
-
+function getVersionMessage(currentVersion: string, laterVersion: string): string[] {
   return [
-    deprecationMessage ? `You are using deprecated version(aws-cdk@${currentVersion}): ${deprecationMessage}` : '',
     `Newer version of CDK is available [${chalk.green(laterVersion as string)}]`,
     getMajorVersionUpgradeMessage(currentVersion),
     'Upgrade recommended (npm install -g aws-cdk)',
@@ -125,8 +122,7 @@ export async function displayVersionMessage(currentVersion = versionNumber(), ve
   try {
     const laterVersion = await latestVersionIfHigher(currentVersion, versionCheckCache ?? new VersionCheckTTL());
     if (laterVersion) {
-      const versionMessage = await getVersionMessage(currentVersion, laterVersion);
-      const bannerMsg = formatAsBanner(versionMessage);
+      const bannerMsg = formatAsBanner(getVersionMessage(currentVersion, laterVersion));
       bannerMsg.forEach((e) => info(e));
     }
   } catch (err: any) {
