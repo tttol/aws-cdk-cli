@@ -688,9 +688,18 @@ const tmpToolkitHelpers = configureProject(
     parent: repo,
     name: '@aws-cdk/tmp-toolkit-helpers',
     description: 'A temporary package to hold code shared between aws-cdk and @aws-cdk/toolkit-lib',
-    deps: [],
     devDeps: [
       cdkBuildTools,
+      '@types/archiver',
+      '@types/glob',
+      '@types/semver',
+      'fast-check',
+    ],
+    deps: [
+      'archiver',
+      'glob',
+      'semver',
+      'yaml@^1',
     ],
     tsconfig: {
       compilerOptions: {
@@ -708,6 +717,7 @@ tmpToolkitHelpers.package.addField('exports', {
   '.': './lib/index.js',
   './package.json': './package.json',
   './api': './lib/api/index.js',
+  './util': './lib/util/index.js',
 });
 
 //////////////////////////////////////////////////////////////////////
@@ -1245,6 +1255,8 @@ toolkitLib.postCompileTask.exec('node build-tools/bundle.mjs');
 // Smoke test built JS files
 toolkitLib.postCompileTask.exec('node ./lib/index.js >/dev/null 2>/dev/null </dev/null');
 toolkitLib.postCompileTask.exec('node ./lib/api/aws-cdk.js >/dev/null 2>/dev/null </dev/null');
+toolkitLib.postCompileTask.exec('node ./lib/api/shared-public.js >/dev/null 2>/dev/null </dev/null');
+toolkitLib.postCompileTask.exec('node ./lib/private/util.js >/dev/null 2>/dev/null </dev/null');
 
 // Do include all .ts files inside init-templates
 toolkitLib.npmignore?.addPatterns(
