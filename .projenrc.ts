@@ -639,7 +639,6 @@ const cdkAssets = configureProject(
         run: 'npx projen shrinkwrap',
       },
     ],
-    npmDistTag: 'v3-latest',
     majorVersion: 3,
 
     jestOptions: jestOptionsForProject({
