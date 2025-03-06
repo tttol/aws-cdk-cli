@@ -1,6 +1,8 @@
 import type { CloudFormationStackArtifact } from '@aws-cdk/cx-api';
 import type { BaseDeployOptions } from './private/deploy-options';
 import type { Tag } from '../../api/aws-cdk';
+import type { ConfirmationRequest } from '../../toolkit/types';
+import type { PermissionChangeType } from '../diff/private/helpers';
 
 export type DeploymentMethod = DirectDeploymentMethod | ChangeSetDeploymentMethod;
 
@@ -122,8 +124,7 @@ export interface DeployOptions extends BaseDeployOptions {
    * Require a confirmation for security relevant changes before continuing with the deployment
    *
    * @default RequireApproval.NEVER
-   * @deprecated in future a message containing the full diff will be emitted and a response requested.
-   * Approval workflows should be implemented in the `IIoHost`.
+   * @deprecated requireApproval is governed by the `IIoHost`. This property is no longer used.
    */
   readonly requireApproval?: RequireApproval;
 
@@ -227,4 +228,15 @@ export interface StackDeployProgress {
    * The stack that's currently being deployed
    */
   readonly stack: CloudFormationStackArtifact;
+}
+
+/**
+ * Payload for a yes/no confirmation in deploy. Includes information on
+ * what kind of change is being made.
+ */
+export interface DeployConfirmationRequest extends ConfirmationRequest {
+  /**
+   * The type of change being made to the IAM permissions.
+   */
+  readonly permissionChangeType?: PermissionChangeType;
 }

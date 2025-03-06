@@ -1,7 +1,7 @@
 import type * as cxapi from '@aws-cdk/cx-api';
 import type { SdkTrace } from './sdk-logger';
 import type { BootstrapEnvironmentProgress } from '../../../actions/bootstrap';
-import type { StackDeployProgress } from '../../../actions/deploy';
+import type { DeployConfirmationRequest, StackDeployProgress } from '../../../actions/deploy';
 import type { StackDestroyProgress } from '../../../actions/destroy';
 import type { StackDetailsPayload } from '../../../actions/list';
 import type { StackRollbackProgress } from '../../../actions/rollback';
@@ -96,10 +96,10 @@ export const CODES = {
     description: 'Confirm rollback during deployment',
     interface: 'ConfirmationRequest',
   }),
-  CDK_TOOLKIT_I5060: make.confirm<ConfirmationRequest>({
+  CDK_TOOLKIT_I5060: make.confirm<DeployConfirmationRequest>({
     code: 'CDK_TOOLKIT_I5060',
     description: 'Confirm deploy security sensitive changes',
-    interface: 'ConfirmationRequest',
+    interface: 'DeployConfirmationRequest',
   }),
 
   CDK_TOOLKIT_I5100: make.info<StackDeployProgress>({
