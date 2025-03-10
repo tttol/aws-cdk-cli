@@ -5,7 +5,7 @@ import { ToolkitError } from '../../toolkit/error';
 const exec = promisify(_exec);
 
 export async function execNpmView() {
-  const { stdout, stderr } = await exec('npm view aws-cdk name version deprecated --json');
+  const { stdout, stderr } = await exec('npm view aws-cdk name version deprecated --json', { timeout: 3000 });
   if (stderr && stderr.trim().length > 0) {
     throw new ToolkitError(`npm view command failed: ${stderr.trim()}`);
   }
