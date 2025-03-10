@@ -1,7 +1,7 @@
-import { VALID_CODE } from './codes';
-import { info } from './messages';
-import { ActionAwareIoHost } from './types';
-import { formatTime } from '../../aws-cdk';
+import { format } from 'util';
+import { IO } from './messages';
+import { formatTime } from '../../../private/util';
+import type { IoHelper } from '../../shared-private';
 
 /**
  * Helper class to measure the time of code.
@@ -37,26 +37,25 @@ export class Timer {
    * Ends the current timer as a specified timing and notifies the IoHost.
    * @returns the elapsed time
    */
-  public async endAs(ioHost: ActionAwareIoHost, type: 'synth' | 'deploy' | 'rollback' | 'destroy') {
+  public async endAs(ioHost: IoHelper, type: 'synth' | 'deploy' | 'rollback' | 'destroy' | 'bootstrap') {
     const duration = this.end();
-    const { code, text } = timerMessageProps(type);
-
-    await ioHost.notify(info(`\n✨  ${text} time: ${duration.asSec}s\n`, code, {
-      duration: duration.asMs,
-    }));
-
+    await ioHost.notify(timerMessage(type, duration));
     return duration;
   }
 }
 
-function timerMessageProps(type: 'synth' | 'deploy' | 'rollback'| 'destroy'): {
-  code: VALID_CODE;
-  text: string;
-} {
+function timerMessage(type: 'synth' | 'deploy' | 'rollback'| 'destroy' | 'bootstrap', duration: {
+  asMs: number;
+  asSec: number;
+}) {
+  const message = `\n✨  %s time: ${duration.asSec}s\n`;
+  const payload = { duration: duration.asMs };
+
   switch (type) {
-    case 'synth': return { code: 'CDK_TOOLKIT_I1000', text: 'Synthesis' };
-    case 'deploy': return { code: 'CDK_TOOLKIT_I5000', text: 'Deployment' };
-    case 'rollback': return { code: 'CDK_TOOLKIT_I6000', text: 'Rollback' };
-    case 'destroy': return { code: 'CDK_TOOLKIT_I7000', text: 'Destroy' };
+    case 'synth': return IO.CDK_TOOLKIT_I1000.msg(format(message, 'Synthesis'), payload);
+    case 'deploy': return IO.CDK_TOOLKIT_I5000.msg(format(message, 'Deployment'), payload);
+    case 'rollback': return IO.CDK_TOOLKIT_I6000.msg(format(message, 'Rollback'), payload);
+    case 'destroy': return IO.CDK_TOOLKIT_I7000.msg(format(message, 'Destroy'), payload);
+    case 'bootstrap': return IO.CDK_TOOLKIT_I9000.msg(format(message, 'Bootstrap'), payload);
   }
 }

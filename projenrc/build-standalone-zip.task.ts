@@ -7,7 +7,6 @@ import { glob } from 'glob';
 async function main() {
   const outdir = await fs.mkdtemp(path.join(os.tmpdir(), 'bundling'));
   try {
-
     const pkgs = ['aws-cdk'];
     // this is a build task, so we are safe either way
     // eslint-disable-next-line @cdklabs/promiseall-no-unbounded-parallelism
@@ -36,7 +35,11 @@ async function main() {
 
     await fs.mkdir('dist/standalone', { recursive: true });
     await fs.rm(path.join('dist/standalone/', zipFileName), { force: true });
-    await fs.rename(path.join(outdir, zipFileName), path.join('dist/standalone/', zipFileName));
+    // Use copyFile instead of rename to avoid cross-device link errors
+    const sourcePath = path.join(outdir, zipFileName);
+    const destPath = path.join('dist/standalone/', zipFileName);
+    await fs.copyFile(sourcePath, destPath);
+    await fs.unlink(sourcePath);
   } finally {
     await fs.rm(outdir, { recursive: true, force: true });
   }

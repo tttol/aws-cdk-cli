@@ -1,23 +1,36 @@
 import type * as cxschema from '@aws-cdk/cloud-assembly-schema';
 
-export interface AppProps {
+/**
+ * Properties the builder function receives.
+ */
+export interface AssemblyBuilderProps {
   /**
    * The output directory into which to the builder app will emit synthesized artifacts.
    */
   readonly outdir?: string;
 
   /**
-   * The context provided tp the builder app to synthesize the Cloud Assembly.
+   * The context provided tp the builder app to synthesize the Cloud Assembly, including looked-up context.
    */
   readonly context?: { [key: string]: any };
 }
 
-export type AssemblyBuilder = (props: AppProps) => Promise<cxschema.ICloudAssembly>;
+export type AssemblyBuilder = (props: AssemblyBuilderProps) => Promise<cxschema.ICloudAssembly>;
 
 /**
  * Configuration for creating a CLI from an AWS CDK App directory
  */
-export interface CdkAppSourceProps {
+export interface AssemblyDirectoryProps {
+  /**
+   * Options to configure loading of the assembly after it has been synthesized
+   */
+  readonly loadAssemblyOptions?: LoadAssemblyOptions;
+}
+
+/**
+ * Configuration for creating a CLI from an AWS CDK App directory
+ */
+export interface AssemblySourceProps {
   /**
    * Execute the application in this working directory.
    *
@@ -56,6 +69,11 @@ export interface CdkAppSourceProps {
    * Options that are passed through the context to a CDK app on synth
    */
   readonly synthOptions?: AppSynthOptions;
+
+  /**
+   * Options to configure loading of the assembly after it has been synthesized
+   */
+  readonly loadAssemblyOptions?: LoadAssemblyOptions;
 }
 
 /**
@@ -119,4 +137,29 @@ export interface AppSynthOptions {
    * @default ["**"] - all stacks
    */
   readonly bundlingForStacks?: string;
+}
+
+/**
+ * Options to configure loading of the assembly after it has been synthesized
+ */
+export interface LoadAssemblyOptions {
+  /**
+   * Check the Toolkit supports the Cloud Assembly Schema version
+   *
+   * When disabled, allows to Toolkit to read a newer cloud assembly than the CX API is designed
+   * to support. Your application may not be aware of all features that in use in the Cloud Assembly.
+   *
+   * @default true
+   */
+  readonly checkVersion?: boolean;
+
+  /**
+   * Validate enums to only have known values
+   *
+   * When disabled, the Toolkit may read enum values it doesn't know about yet.
+   * You will have to make sure to always check the values of enums you encounter in the manifest.
+   *
+   * @default true
+   */
+  readonly checkEnums?: boolean;
 }

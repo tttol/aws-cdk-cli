@@ -1,24 +1,24 @@
-import { DescribeChangeSetOutput, fullDiff } from '@aws-cdk/cloudformation-diff';
-import * as cxapi from '@aws-cdk/cx-api';
-import { ToolkitError } from '../../../api/errors';
-import { RequireApproval } from '../../deploy';
+import type { DescribeChangeSetOutput } from '@aws-cdk/cloudformation-diff';
+import { fullDiff } from '@aws-cdk/cloudformation-diff';
+import type * as cxapi from '@aws-cdk/cx-api';
+import { PermissionChangeType } from '..';
 
 /**
- * Return whether the diff has security-impacting changes that need confirmation
+ * Return whether the diff has security-impacting changes that need confirmation.
  */
-export function diffRequiresApproval(
+export function determinePermissionType(
   oldTemplate: any,
   newTemplate: cxapi.CloudFormationStackArtifact,
-  requireApproval: RequireApproval,
   changeSet?: DescribeChangeSetOutput,
-): boolean {
-  // @todo return or print the full diff.
+): PermissionChangeType {
+  // @todo return a printable version of the full diff.
   const diff = fullDiff(oldTemplate, newTemplate.template, changeSet);
 
-  switch (requireApproval) {
-    case RequireApproval.NEVER: return false;
-    case RequireApproval.ANY_CHANGE: return diff.permissionsAnyChanges;
-    case RequireApproval.BROADENING: return diff.permissionsBroadened;
-    default: throw new ToolkitError(`Unrecognized approval level: ${requireApproval}`);
+  if (diff.permissionsBroadened) {
+    return PermissionChangeType.BROADENING;
+  } else if (diff.permissionsAnyChanges) {
+    return PermissionChangeType.NON_BROADENING;
+  } else {
+    return PermissionChangeType.NONE;
   }
 }

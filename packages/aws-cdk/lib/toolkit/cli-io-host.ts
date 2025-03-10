@@ -1,127 +1,23 @@
 import * as util from 'node:util';
+import { RequireApproval } from '@aws-cdk/cloud-assembly-schema';
 import * as chalk from 'chalk';
 import * as promptly from 'promptly';
 import { ToolkitError } from './error';
+import type { IIoHost, IoMessage, IoMessageCode, IoMessageLevel, IoRequest, ToolkitAction } from '../../../@aws-cdk/tmp-toolkit-helpers/src/api/io';
+import { isMessageRelevantForLevel } from '../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
+import type { ActivityPrinterProps, IActivityPrinter } from '../cli/activity-printer';
+import { CurrentActivityPrinter, HistoryActivityPrinter } from '../cli/activity-printer';
+import { StackActivityProgress } from '../commands/deploy';
 
-export type IoMessageCodeCategory = 'TOOLKIT' | 'SDK' | 'ASSETS';
-export type IoCodeLevel = 'E' | 'W' | 'I';
-export type IoMessageSpecificCode<L extends IoCodeLevel> = `CDK_${IoMessageCodeCategory}_${L}${number}${number}${number}${number}`;
-export type IoMessageCode = IoMessageSpecificCode<IoCodeLevel>;
+export type { IIoHost, IoMessage, IoMessageCode, IoMessageLevel, IoRequest };
 
-/**
- * Basic message structure for toolkit notifications.
- * Messages are emitted by the toolkit and handled by the IoHost.
- */
-export interface IoMessage<T> {
-  /**
-   * The time the message was emitted.
-   */
-  readonly time: Date;
-
-  /**
-   * The log level of the message.
-   */
-  readonly level: IoMessageLevel;
-
-  /**
-   * The action that triggered the message.
-   */
-  readonly action: ToolkitAction;
-
-  /**
-   * A short message code uniquely identifying a message type using the format CDK_[CATEGORY]_[E/W/I][000-999].
-   *
-   * The level indicator follows these rules:
-   * - 'E' for error level messages
-   * - 'W' for warning level messages
-   * - 'I' for info/debug/trace level messages
-   *
-   * Codes ending in 000 are generic messages, while codes ending in 001-999 are specific to a particular message.
-   * The following are examples of valid and invalid message codes:
-   * ```ts
-   * 'CDK_ASSETS_I000'       // valid: generic assets info message
-   * 'CDK_TOOLKIT_E002'      // valid: specific toolkit error message
-   * 'CDK_SDK_W023'          // valid: specific sdk warning message
-   * ```
-   */
-  readonly code: IoMessageCode;
-
-  /**
-   * The message text.
-   */
-  readonly message: string;
-
-  /**
-   * The data attached to the message.
-   */
-  readonly data?: T;
-}
-
-export interface IoRequest<T, U> extends IoMessage<T> {
-  /**
-   * The default response that will be used if no data is returned.
-   */
-  readonly defaultResponse: U;
-}
-
-export type IoMessageLevel = 'error' | 'result' | 'warn' | 'info' | 'debug' | 'trace';
-
-export const levelPriority: Record<IoMessageLevel, number> = {
-  error: 0,
-  result: 1,
-  warn: 2,
-  info: 3,
-  debug: 4,
-  trace: 5,
-};
-
-/**
- * Temporary helper to group required props for IoMessages
- */
-export interface IoMessaging {
-  ioHost: IIoHost;
-  action: ToolkitAction;
-}
-
-/**
- * The current action being performed by the CLI. 'none' represents the absence of an action.
- */
-export type ToolkitAction =
-| 'assembly'
-| 'bootstrap'
-| 'synth'
-| 'list'
-| 'diff'
-| 'deploy'
-| 'rollback'
-| 'watch'
-| 'destroy'
+type CliAction =
+| ToolkitAction
 | 'context'
 | 'docs'
-| 'doctor'
-| 'gc'
-| 'import'
-| 'metadata'
 | 'notices'
-| 'init'
-| 'migrate'
-| 'version';
-
-export interface IIoHost {
-  /**
-   * Notifies the host of a message.
-   * The caller waits until the notification completes.
-   */
-  notify<T>(msg: IoMessage<T>): Promise<void>;
-
-  /**
-   * Notifies the host of a message that requires a response.
-   *
-   * If the host does not return a response the suggested
-   * default response from the input message will be used.
-   */
-  requestResponse<T, U>(msg: IoRequest<T, U>): Promise<U>;
-}
+| 'version'
+| 'none';
 
 export interface CliIoHostProps {
   /**
@@ -159,6 +55,20 @@ export interface CliIoHostProps {
    * @default - determined from the environment, specifically based on `process.env.CI`
    */
   readonly isCI?: boolean;
+
+  /**
+   * In what scenarios should the CliIoHost ask for approval
+   *
+   * @default RequireApproval.BROADENING
+   */
+  readonly requireDeployApproval?: RequireApproval;
+
+  /*
+   * The initial Toolkit action the hosts starts with.
+   *
+   * @default StackActivityProgress.BAR
+   */
+  readonly stackProgress?: StackActivityProgress;
 }
 
 /**
@@ -180,22 +90,53 @@ export class CliIoHost implements IIoHost {
    */
   private static _instance: CliIoHost | undefined;
 
-  // internal state for getters/setter
-  private _currentAction: ToolkitAction;
-  private _isCI: boolean;
-  private _isTTY: boolean;
-  private _logLevel: IoMessageLevel;
+  /**
+   * The current action being performed by the CLI.
+   */
+  public currentAction: CliAction;
+
+  /**
+   * Whether the CliIoHost is running in CI mode.
+   *
+   * In CI mode, all non-error output goes to stdout instead of stderr.
+   */
+  public isCI: boolean;
+
+  /**
+   * Whether the host can use interactions and message styling.
+   */
+  public isTTY: boolean;
+
+  /**
+   * The current threshold.
+   *
+   * Messages with a lower priority level will be ignored.
+   */
+  public logLevel: IoMessageLevel;
+
+  /**
+   * The conditions for requiring approval in this CliIoHost.
+   */
+  public requireDeployApproval: RequireApproval;
+
   private _internalIoHost?: IIoHost;
+  private _progress: StackActivityProgress = StackActivityProgress.BAR;
+
+  // Stack Activity Printer
+  private activityPrinter?: IActivityPrinter;
 
   // Corked Logging
   private corkedCounter = 0;
-  private readonly corkedLoggingBuffer: IoMessage<any>[] = [];
+  private readonly corkedLoggingBuffer: IoMessage<unknown>[] = [];
 
   private constructor(props: CliIoHostProps = {}) {
-    this._currentAction = props.currentAction ?? 'none' as ToolkitAction;
-    this._isTTY = props.isTTY ?? process.stdout.isTTY ?? false;
-    this._logLevel = props.logLevel ?? 'info';
-    this._isCI = props.isCI ?? isCI();
+    this.currentAction = props.currentAction ?? 'none';
+    this.isTTY = props.isTTY ?? process.stdout.isTTY ?? false;
+    this.logLevel = props.logLevel ?? 'info';
+    this.isCI = props.isCI ?? isCI();
+    this.requireDeployApproval = props.requireDeployApproval ?? RequireApproval.BROADENING;
+
+    this.stackProgress = props.stackProgress ?? StackActivityProgress.BAR;
   }
 
   /**
@@ -208,65 +149,46 @@ export class CliIoHost implements IIoHost {
   }
 
   /**
-   * The current action being performed by the CLI.
+   * Update the stackProgress preference.
    */
-  public get currentAction(): ToolkitAction {
-    return this._currentAction;
+  public set stackProgress(type: StackActivityProgress) {
+    this._progress = type;
   }
 
   /**
-   * Sets the current action being performed by the CLI.
+   * Gets the stackProgress value.
    *
-   * @param action The action being performed by the CLI.
+   * This takes into account other state of the ioHost,
+   * like if isTTY and isCI.
    */
-  public set currentAction(action: ToolkitAction) {
-    this._currentAction = action;
-  }
+  public get stackProgress(): StackActivityProgress {
+    // We can always use EVENTS
+    if (this._progress === StackActivityProgress.EVENTS) {
+      return this._progress;
+    }
 
-  /**
-   * Whether the host can use interactions and message styling.
-   */
-  public get isTTY(): boolean {
-    return this._isTTY;
-  }
+    // if a debug message (and thus any more verbose messages) are relevant to the current log level, we have verbose logging
+    const verboseLogging = isMessageRelevantForLevel({ level: 'debug' }, this.logLevel);
+    if (verboseLogging) {
+      return StackActivityProgress.EVENTS;
+    }
 
-  /**
-   * Set TTY mode, i.e can the host use interactions and message styling.
-   *
-   * @param value set TTY mode
-   */
-  public set isTTY(value: boolean) {
-    this._isTTY = value;
-  }
+    // On Windows we cannot use fancy output
+    const isWindows = process.platform === 'win32';
+    if (isWindows) {
+      return StackActivityProgress.EVENTS;
+    }
 
-  /**
-   * Whether the CliIoHost is running in CI mode. In CI mode, all non-error output goes to stdout instead of stderr.
-   */
-  public get isCI(): boolean {
-    return this._isCI;
-  }
+    // On some CI systems (such as CircleCI) output still reports as a TTY so we also
+    // need an individual check for whether we're running on CI.
+    // see: https://discuss.circleci.com/t/circleci-terminal-is-a-tty-but-term-is-not-set/9965
+    const fancyOutputAvailable = this.isTTY && !this.isCI;
+    if (!fancyOutputAvailable) {
+      return StackActivityProgress.EVENTS;
+    }
 
-  /**
-   * Set the CI mode. In CI mode, all non-error output goes to stdout instead of stderr.
-   * @param value set the CI mode
-   */
-  public set isCI(value: boolean) {
-    this._isCI = value;
-  }
-
-  /**
-   * The current threshold. Messages with a lower priority level will be ignored.
-   */
-  public get logLevel(): IoMessageLevel {
-    return this._logLevel;
-  }
-
-  /**
-   * Sets the current threshold. Messages with a lower priority level will be ignored.
-   * @param level The new log level threshold
-   */
-  public set logLevel(level: IoMessageLevel) {
-    this._logLevel = level;
+    // Use the user preference
+    return this._progress;
   }
 
   /**
@@ -298,12 +220,20 @@ export class CliIoHost implements IIoHost {
    * Notifies the host of a message.
    * The caller waits until the notification completes.
    */
-  public async notify<T>(msg: IoMessage<T>): Promise<void> {
+  public async notify(msg: IoMessage<unknown>): Promise<void> {
     if (this._internalIoHost) {
       return this._internalIoHost.notify(msg);
     }
 
-    if (levelPriority[msg.level] > levelPriority[this.logLevel]) {
+    if (this.isStackActivity(msg)) {
+      if (!this.activityPrinter) {
+        this.activityPrinter = this.makeActivityPrinter();
+      }
+      await this.activityPrinter.notify(msg);
+      return;
+    }
+
+    if (!isMessageRelevantForLevel(msg, this.logLevel)) {
       return;
     }
 
@@ -315,6 +245,40 @@ export class CliIoHost implements IIoHost {
     const output = this.formatMessage(msg);
     const stream = this.selectStream(msg.level);
     stream.write(output);
+  }
+
+  /**
+   * Detect stack activity messages so they can be send to the printer.
+   */
+  private isStackActivity(msg: IoMessage<unknown>) {
+    return [
+      'CDK_TOOLKIT_I5501',
+      'CDK_TOOLKIT_I5502',
+      'CDK_TOOLKIT_I5503',
+    ].includes(msg.code);
+  }
+
+  /**
+   * Detect special messages encode information about whether or not
+   * they require approval
+   */
+  private skipApprovalStep(msg: IoRequest<any, any>): boolean {
+    const approvalToolkitCodes = ['CDK_TOOLKIT_I5060'];
+    if (!approvalToolkitCodes.includes(msg.code)) {
+      false;
+    }
+
+    switch (this.requireDeployApproval) {
+      // Never require approval
+      case RequireApproval.NEVER:
+        return true;
+      // Always require approval
+      case RequireApproval.ANYCHANGE:
+        return false;
+      // Require approval if changes include broadening permissions
+      case RequireApproval.BROADENING:
+        return ['none', 'non-broadening'].includes(msg.data?.permissionChangeType);
+    }
   }
 
   /**
@@ -377,6 +341,14 @@ export class CliIoHost implements IIoHost {
         throw new ToolkitError(`${motivation}, but concurrency is greater than 1 so we are unable to get a confirmation from the user`);
       }
 
+      // Special approval prompt
+      // Determine if the message needs approval. If it does, continue (it is a basic confirmation prompt)
+      // If it does not, return success (true). We only check messages with codes that we are aware
+      // are requires approval codes.
+      if (this.skipApprovalStep(msg)) {
+        return true;
+      }
+
       // Basic confirmation prompt
       // We treat all requests with a boolean response as confirmation prompts
       if (isConfirmationPrompt(msg)) {
@@ -404,9 +376,9 @@ export class CliIoHost implements IIoHost {
   /**
    * Formats a message for console output with optional color support
    */
-  private formatMessage(msg: IoMessage<any>): string {
+  private formatMessage(msg: IoMessage<unknown>): string {
     // apply provided style or a default style if we're in TTY mode
-    let message_text = this._isTTY
+    let message_text = this.isTTY
       ? styleMap[msg.level](msg.message)
       : msg.message;
 
@@ -422,6 +394,22 @@ export class CliIoHost implements IIoHost {
   private formatTime(d: Date): string {
     const pad = (n: number): string => n.toString().padStart(2, '0');
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  /**
+   * Get an instance of the ActivityPrinter
+   */
+  private makeActivityPrinter() {
+    const props: ActivityPrinterProps = {
+      stream: this.selectStream('info'),
+    };
+
+    switch (this.stackProgress) {
+      case StackActivityProgress.EVENTS:
+        return new HistoryActivityPrinter(props);
+      case StackActivityProgress.BAR:
+        return new CurrentActivityPrinter(props);
+    }
   }
 }
 
@@ -474,3 +462,4 @@ const styleMap: Record<IoMessageLevel, (str: string) => string> = {
 export function isCI(): boolean {
   return process.env.CI !== undefined && process.env.CI !== 'false' && process.env.CI !== '0';
 }
+

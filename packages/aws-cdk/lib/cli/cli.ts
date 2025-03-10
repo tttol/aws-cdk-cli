@@ -1,11 +1,11 @@
 import * as cxapi from '@aws-cdk/cx-api';
-import '@jsii/check-node/run';
 import * as chalk from 'chalk';
 import { CdkToolkit, AssetBuildTime } from './cdk-toolkit';
 import { parseCommandLineArguments } from './parse-command-line-arguments';
 import { checkForPlatformWarnings } from './platform-warnings';
 
 import * as version from './version';
+import { asIoHelper } from '../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 import { SdkProvider } from '../api/aws-auth';
 import { SdkToCliLogger } from '../api/aws-auth/sdk-logger';
 import { setSdkTracing } from '../api/aws-auth/tracing';
@@ -62,6 +62,7 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
     isTTY: process.stdout.isTTY,
     isCI: Boolean(argv.ci),
     currentAction: cmd,
+    stackProgress: argv.progress,
   }, true);
 
   // Debug should always imply tracing
@@ -78,7 +79,7 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
     debug(`Error while checking for platform warnings: ${e}`);
   }
 
-  debug('CDK toolkit version:', version.displayVersion());
+  debug('CDK Toolkit CLI version:', version.displayVersion());
   debug('Command line arguments:', argv);
 
   const configuration = new Configuration({
@@ -107,7 +108,7 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
       proxyAddress: argv.proxy,
       caBundlePath: argv['ca-bundle-path'],
     },
-    logger: new SdkToCliLogger(ioHost),
+    logger: new SdkToCliLogger(asIoHelper(ioHost, ioHost.currentAction as any)),
   });
 
   let outDirLock: ILock | undefined;
@@ -185,8 +186,7 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
     const cloudFormation = new Deployments({
       sdkProvider,
       toolkitStackName,
-      ioHost,
-      action: ioHost.currentAction,
+      ioHelper: asIoHelper(ioHost, ioHost.currentAction as any),
     });
 
     if (args.all && args.STACKS) {
@@ -265,7 +265,7 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
         const source: BootstrapSource = determineBootstrapVersion(args);
 
         if (args.showTemplate) {
-          const bootstrapper = new Bootstrapper(source, { ioHost: ioHost, action: ioHost.currentAction });
+          const bootstrapper = new Bootstrapper(source, asIoHelper(ioHost, ioHost.currentAction));
           return bootstrapper.showTemplate(args.json);
         }
 
@@ -428,7 +428,6 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
           exclusively: args.exclusively,
           force: args.force,
           roleArn: args.roleArn,
-          ci: args.ci,
         });
 
       case 'gc':
@@ -480,6 +479,7 @@ export async function exec(args: string[], synthesizer?: Synthesizer): Promise<n
             language,
             canUseNetwork: undefined,
             generateOnly: args.generateOnly,
+            libVersion: args.libVersion,
           });
         }
       case 'migrate':

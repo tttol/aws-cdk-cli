@@ -2,9 +2,9 @@ import * as cxapi from '@aws-cdk/cx-api';
 import { AssetManifest, type IManifestEntry } from 'cdk-assets';
 import { WorkGraph } from './work-graph';
 import { DeploymentState, AssetBuildNode, WorkNode } from './work-graph-types';
-import { IoMessaging } from '../../toolkit/cli-io-host';
+import { IoHelper } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 import { ToolkitError } from '../../toolkit/error';
-import { contentHashAny } from '../../util/content-hash';
+import { contentHashAny } from '../../util';
 
 export class WorkGraphBuilder {
   /**
@@ -22,17 +22,15 @@ export class WorkGraphBuilder {
     'stack': 5,
   };
   private readonly graph: WorkGraph;
-  private readonly ioHost: IoMessaging['ioHost'];
-  private readonly action: IoMessaging['action'];
+  private readonly ioHelper: IoHelper;
 
   constructor(
-    { ioHost, action }: IoMessaging,
+    ioHelper: IoHelper,
     private readonly prebuildAssets: boolean,
     private readonly idPrefix = '',
   ) {
-    this.graph = new WorkGraph({}, { ioHost, action });
-    this.ioHost = ioHost;
-    this.action = action;
+    this.graph = new WorkGraph({}, ioHelper);
+    this.ioHelper = ioHelper;
   }
 
   private addStack(artifact: cxapi.CloudFormationStackArtifact) {
@@ -62,7 +60,7 @@ export class WorkGraphBuilder {
       const node: AssetBuildNode = {
         type: 'asset-build',
         id: buildId,
-        note: assetId,
+        note: asset.displayName(false),
         dependencies: new Set([
           ...this.stackArtifactIds(assetManifestArtifact.dependencies),
           // If we disable prebuild, then assets inherit (stack) dependencies from their parent stack
@@ -83,7 +81,7 @@ export class WorkGraphBuilder {
       this.graph.addNodes({
         type: 'asset-publish',
         id: publishId,
-        note: `${asset.id}`,
+        note: asset.displayName(true),
         dependencies: new Set([
           buildId,
         ]),
@@ -130,7 +128,7 @@ export class WorkGraphBuilder {
       } else if (cxapi.NestedCloudAssemblyArtifact.isNestedCloudAssemblyArtifact(artifact)) {
         const assembly = new cxapi.CloudAssembly(artifact.fullPath, { topoSort: false });
         const nestedGraph = new WorkGraphBuilder(
-          { ioHost: this.ioHost, action: this.action },
+          this.ioHelper,
           this.prebuildAssets,
           `${this.idPrefix}${artifact.id}.`,
         ).build(assembly.artifacts);
@@ -177,8 +175,8 @@ export class WorkGraphBuilder {
 
 function stacksFromAssets(artifacts: cxapi.CloudArtifact[]) {
   const ret = new Map<cxapi.AssetManifestArtifact, cxapi.CloudFormationStackArtifact>();
-  for (const stack of artifacts.filter(cxapi.CloudFormationStackArtifact.isCloudFormationStackArtifact)) {
-    const assetArtifacts = stack.dependencies.filter(cxapi.AssetManifestArtifact.isAssetManifestArtifact);
+  for (const stack of artifacts.filter(x => cxapi.CloudFormationStackArtifact.isCloudFormationStackArtifact(x))) {
+    const assetArtifacts = stack.dependencies.filter((x) => cxapi.AssetManifestArtifact.isAssetManifestArtifact(x));
     for (const art of assetArtifacts) {
       ret.set(art, stack);
     }
@@ -188,5 +186,5 @@ function stacksFromAssets(artifacts: cxapi.CloudArtifact[]) {
 }
 
 function onlyStacks(artifacts: cxapi.CloudArtifact[]) {
-  return artifacts.filter(cxapi.CloudFormationStackArtifact.isCloudFormationStackArtifact);
+  return artifacts.filter(x => cxapi.CloudFormationStackArtifact.isCloudFormationStackArtifact(x));
 }

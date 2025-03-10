@@ -62,7 +62,8 @@ export const ESLINT_RULES = {
   ],
 
   // Cannot import from the same module twice
-  'no-duplicate-imports': ['error'],
+  // we prefer `import/no-duplicate` over `no-duplicate-imports` since the former can handle type imports
+  'import/no-duplicates': 'error',
 
   // Cannot shadow names
   'no-shadow': ['off'],
@@ -164,6 +165,9 @@ export const ESLINT_RULES = {
       'method',
     ],
   }],
+
+  // Unbound methods are a JavaScript footgun
+  '@typescript-eslint/unbound-method': 'error',
 
   // Overrides for plugin:jest/recommended
   'jest/expect-expect': 'off',

@@ -7,6 +7,7 @@ import * as fs from 'fs-extra';
 import * as promptly from 'promptly';
 import * as uuid from 'uuid';
 import { Configuration, PROJECT_CONFIG } from './user-configuration';
+import { asIoHelper } from '../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 import { DEFAULT_TOOLKIT_STACK_NAME } from '../api';
 import { SdkProvider } from '../api/aws-auth';
 import { Bootstrapper, BootstrapEnvironmentOptions } from '../api/bootstrap';
@@ -25,10 +26,10 @@ import { HotswapMode, HotswapPropertyOverrides, EcsHotswapProperties } from '../
 import { findCloudWatchLogGroups } from '../api/logs/find-cloudwatch-logs';
 import { CloudWatchLogEventMonitor } from '../api/logs/logs-monitor';
 import { ResourceImporter, removeNonImportResources, ResourceMigrator } from '../api/resource-import';
-import { StackActivityProgress } from '../api/stack-events';
 import { tagsForStack, type Tag } from '../api/tags';
 import { type AssetBuildNode, type AssetPublishNode, type Concurrency, type StackNode, type WorkGraph } from '../api/work-graph';
 import { WorkGraphBuilder } from '../api/work-graph/work-graph-builder';
+import { StackActivityProgress } from '../commands/deploy';
 import {
   generateCdkApp,
   generateStack,
@@ -52,11 +53,7 @@ import { listStacks } from '../list-stacks';
 import { result as logResult, debug, error, highlight, info, success, warning } from '../logging';
 import { CliIoHost } from '../toolkit/cli-io-host';
 import { ToolkitError } from '../toolkit/error';
-import { numberFromBool, partition } from '../util';
-import { validateSnsTopicArn } from '../util/cloudformation';
-import { formatErrorMessage } from '../util/format-error';
-import { deserializeStructure, obscureTemplate, serializeStructure } from '../util/serialize';
-import { formatTime } from '../util/string-manipulation';
+import { numberFromBool, partition, validateSnsTopicArn, formatErrorMessage, deserializeStructure, obscureTemplate, serializeStructure, formatTime } from '../util';
 
 // Must use a require() otherwise esbuild complains about calling a namespace
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -133,12 +130,12 @@ export enum AssetBuildTime {
    * This is intended for expensive Docker image builds; so that if the Docker image build
    * fails, no stacks are unnecessarily deployed (with the attendant wait time).
    */
-  ALL_BEFORE_DEPLOY,
+  ALL_BEFORE_DEPLOY = 'all-before-deploy',
 
   /**
    * Build assets just-in-time, before publishing
    */
-  JUST_IN_TIME,
+  JUST_IN_TIME = 'just-in-time',
 }
 
 /**
@@ -207,8 +204,7 @@ export class CdkToolkit {
 
         const migrator = new ResourceMigrator({
           deployments: this.props.deployments,
-          ioHost: this.ioHost,
-          action: 'diff',
+          ioHelper: asIoHelper(this.ioHost, 'diff'),
         });
         const resourcesToImport = await migrator.tryGetResources(await this.props.deployments.resolveEnvironment(stack));
         if (resourcesToImport) {
@@ -236,7 +232,7 @@ export class CdkToolkit {
           }
 
           if (stackExists) {
-            changeSet = await createDiffChangeSet({ ioHost: this.ioHost, action: 'diff' }, {
+            changeSet = await createDiffChangeSet(asIoHelper(this.ioHost, 'diff'), {
               stack,
               uuid: uuid.v4(),
               deployments: this.props.deployments,
@@ -308,8 +304,7 @@ export class CdkToolkit {
 
     const migrator = new ResourceMigrator({
       deployments: this.props.deployments,
-      ioHost: this.ioHost,
-      action: 'deploy',
+      ioHelper: asIoHelper(this.ioHost, 'deploy'),
     });
     await migrator.tryMigrateResources(stackCollection, {
       toolkitStackName: this.toolkitStackName,
@@ -358,6 +353,7 @@ export class CdkToolkit {
         stack: assetNode.parentStack,
         roleArn: options.roleArn,
         stackName: assetNode.parentStack.stackName,
+        forcePublish: options.force,
       });
     };
 
@@ -386,7 +382,6 @@ export class CdkToolkit {
             force: true,
             roleArn: options.roleArn,
             fromDeploy: true,
-            ci: options.ci,
           });
         }
         return;
@@ -453,8 +448,6 @@ export class CdkToolkit {
             force: options.force,
             parameters: Object.assign({}, parameterMap['*'], parameterMap[stack.stackName]),
             usePreviousParameters: options.usePreviousParameters,
-            progress,
-            ci: options.ci,
             rollback,
             hotswap: options.hotswap,
             hotswapPropertyOverrides: hotswapPropertyOverrides,
@@ -550,7 +543,7 @@ export class CdkToolkit {
         );
       } finally {
         if (options.cloudWatchLogMonitor) {
-          const foundLogGroupsResult = await findCloudWatchLogGroups(this.props.sdkProvider, { ioHost: this.ioHost, action: 'deploy' }, stack);
+          const foundLogGroupsResult = await findCloudWatchLogGroups(this.props.sdkProvider, asIoHelper(this.ioHost, 'deploy'), stack);
           options.cloudWatchLogMonitor.addLogGroups(
             foundLogGroupsResult.env,
             foundLogGroupsResult.sdk,
@@ -574,19 +567,24 @@ export class CdkToolkit {
     const assetBuildTime = options.assetBuildTime ?? AssetBuildTime.ALL_BEFORE_DEPLOY;
     const prebuildAssets = assetBuildTime === AssetBuildTime.ALL_BEFORE_DEPLOY;
     const concurrency = options.concurrency || 1;
-    const progress = concurrency > 1 ? StackActivityProgress.EVENTS : options.progress;
-    if (concurrency > 1 && options.progress && options.progress != StackActivityProgress.EVENTS) {
-      warning('⚠️ The --concurrency flag only supports --progress "events". Switching to "events".');
+    if (concurrency > 1) {
+      // always force "events" progress output when we have concurrency
+      this.ioHost.stackProgress = StackActivityProgress.EVENTS;
+
+      // ...but only warn if the user explicitly requested "bar" progress
+      if (options.progress && options.progress != StackActivityProgress.EVENTS) {
+        warning('⚠️ The --concurrency flag only supports --progress "events". Switching to "events".');
+      }
     }
 
     const stacksAndTheirAssetManifests = stacks.flatMap((stack) => [
       stack,
-      ...stack.dependencies.filter(cxapi.AssetManifestArtifact.isAssetManifestArtifact),
+      ...stack.dependencies.filter(x => cxapi.AssetManifestArtifact.isAssetManifestArtifact(x)),
     ]);
-    const workGraph = new WorkGraphBuilder({
-      ioHost: this.ioHost,
-      action: 'deploy',
-    }, prebuildAssets).build(stacksAndTheirAssetManifests);
+    const workGraph = new WorkGraphBuilder(
+      asIoHelper(this.ioHost, 'deploy'),
+      prebuildAssets,
+    ).build(stacksAndTheirAssetManifests);
 
     // Unless we are running with '--force', skip already published assets
     if (!options.force) {
@@ -768,8 +766,7 @@ export class CdkToolkit {
 
     const resourceImporter = new ResourceImporter(stack, {
       deployments: this.props.deployments,
-      ioHost: this.ioHost,
-      action: 'import',
+      ioHelper: asIoHelper(this.ioHost, 'import'),
     });
     const { additions, hasNonAdditions } = await resourceImporter.discoverImportableResources(options.force);
     if (additions.length === 0) {
@@ -810,7 +807,6 @@ export class CdkToolkit {
       tags,
       deploymentMethod: options.deploymentMethod,
       usePreviousParameters: true,
-      progress: options.progress,
       rollback: options.rollback,
     });
 
@@ -859,7 +855,6 @@ export class CdkToolkit {
           stack,
           deployName: stack.stackName,
           roleArn: options.roleArn,
-          ci: options.ci,
         });
         success(`\n ✅  %s: ${action}ed`, chalk.blue(stack.displayName));
       } catch (e) {
@@ -964,7 +959,7 @@ export class CdkToolkit {
     userEnvironmentSpecs: string[],
     options: BootstrapEnvironmentOptions,
   ): Promise<void> {
-    const bootstrapper = new Bootstrapper(options.source, { ioHost: this.ioHost, action: 'bootstrap' });
+    const bootstrapper = new Bootstrapper(options.source, asIoHelper(this.ioHost, 'bootstrap'));
     // If there is an '--app' argument and an environment looks like a glob, we
     // select the environments from the app. Otherwise, use what the user said.
 
@@ -999,10 +994,7 @@ export class CdkToolkit {
       success(' ⏳  Garbage Collecting environment %s...', chalk.blue(environment.name));
       const gc = new GarbageCollector({
         sdkProvider: this.props.sdkProvider,
-        msg: {
-          ioHost: this.ioHost,
-          action: 'gc',
-        },
+        ioHelper: asIoHelper(this.ioHost, 'gc'),
         resolvedEnvironment: environment,
         bootstrapStackName: options.bootstrapStackName,
         rollbackBufferDays: options.rollbackBufferDays,
@@ -1701,13 +1693,6 @@ export interface DestroyOptions {
    * Whether the destroy request came from a deploy.
    */
   fromDeploy?: boolean;
-
-  /**
-   * Whether we are on a CI system
-   *
-   * @default false
-   */
-  readonly ci?: boolean;
 }
 
 /**

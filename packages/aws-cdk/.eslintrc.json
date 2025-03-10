@@ -76,9 +76,7 @@
         }
       }
     ],
-    "import/no-duplicates": [
-      "error"
-    ],
+    "import/no-duplicates": "error",
     "no-shadow": [
       "off"
     ],
@@ -272,9 +270,6 @@
         ]
       }
     ],
-    "no-duplicate-imports": [
-      "error"
-    ],
     "semi": [
       "error",
       "always"
@@ -304,6 +299,7 @@
         "message": "Use the md5hash() function from the core library if you want md5"
       }
     ],
+    "@typescript-eslint/unbound-method": "error",
     "jest/expect-expect": "off",
     "jest/no-conditional-expect": "off",
     "jest/no-done-callback": "off",

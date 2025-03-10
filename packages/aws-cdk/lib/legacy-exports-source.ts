@@ -28,7 +28,6 @@ export { availableInitTemplates } from './init';
 export * from './legacy-logging-source';
 export { deepClone, flatten, ifDefined, isArray, isEmpty, numberFromBool, partition } from './util';
 export { contentHash } from './util/content-hash';
-export { rootDir } from './util/directories';
+export { cliRootDir as rootDir } from './cli/root-dir';
 export { deepMerge } from './util/objects';
 export { leftPad } from './util/string-manipulation';
-

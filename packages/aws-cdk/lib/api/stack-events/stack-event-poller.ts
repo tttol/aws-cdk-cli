@@ -1,5 +1,5 @@
 import type { StackEvent } from '@aws-sdk/client-cloudformation';
-import { formatErrorMessage } from '../../util/format-error';
+import { formatErrorMessage } from '../../util';
 import type { ICloudFormationClient } from '../aws-auth';
 
 export interface StackEventPollerProps {
@@ -32,7 +32,14 @@ export interface StackEventPollerProps {
 }
 
 export interface ResourceEvent {
+  /**
+   * The Stack Event as received from CloudFormation
+   */
   readonly event: StackEvent;
+
+  /**
+   * IDs of parent stacks of the resource, in case of resources in nested stacks
+   */
   readonly parentStackLogicalIds: string[];
 
   /**

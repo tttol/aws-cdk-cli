@@ -5,8 +5,10 @@ import * as path from 'path';
 import * as semver from 'semver';
 import { debug, info } from '../logging';
 import { ToolkitError } from '../toolkit/error';
-import { cdkCacheDir, rootDir } from '../util/directories';
+import { cdkCacheDir } from '../util';
+import { cliRootDir } from './root-dir';
 import { formatAsBanner } from './util/console-formatters';
+import { getLatestVersionFromNpm } from './util/npm';
 import { execNpmView } from './util/npm';
 
 const ONE_DAY_IN_SECONDS = 1 * 24 * 60 * 60;
@@ -25,12 +27,12 @@ export function isDeveloperBuild(): boolean {
 
 export function versionNumber(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require(path.join(rootDir(), 'package.json')).version.replace(/\+[0-9a-f]+$/, '');
+  return require(path.join(cliRootDir(), 'package.json')).version.replace(/\+[0-9a-f]+$/, '');
 }
 
 function commit(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require(path.join(rootDir(), 'build-info.json')).commit;
+  return require(path.join(cliRootDir(), 'build-info.json')).commit;
 }
 
 export class VersionCheckTTL {

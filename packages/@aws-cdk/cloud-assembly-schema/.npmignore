@@ -20,8 +20,9 @@ tsconfig.tsbuildinfo
 /dist/changelog.md
 /dist/version.txt
 .eslintrc.js
+build-tools
 !.jsii
 *.ts
 !*.d.ts
-** /scripts
+**/scripts
 /.gitattributes

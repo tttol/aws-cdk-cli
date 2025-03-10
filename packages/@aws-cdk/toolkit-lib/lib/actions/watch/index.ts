@@ -1,4 +1,4 @@
-import type { BaseDeployOptions, HotswapMode } from '../deploy';
+import type { BaseDeployOptions } from '../deploy/private';
 
 export interface WatchOptions extends BaseDeployOptions {
   /**
@@ -37,23 +37,33 @@ export interface WatchOptions extends BaseDeployOptions {
    * @default 'cdk.out'
    */
   readonly outdir?: string;
-
-  /**
-   * @TODO can this be part of `DeploymentMethod`
-   *
-   * Whether to perform a 'hotswap' deployment.
-   * A 'hotswap' deployment will attempt to short-circuit CloudFormation
-   * and update the affected resources like Lambda functions directly.
-   *
-   * @default HotswapMode.HOTSWAP_ONLY
-   */
-  readonly hotswap?: HotswapMode;
 }
 
-export function patternsArrayForWatch(
-  patterns: string | string[] | undefined,
-  options: { rootDir: string; returnRootDirIfEmpty: boolean },
-): string[] {
-  const patternsArray: string[] = patterns !== undefined ? (Array.isArray(patterns) ? patterns : [patterns]) : [];
-  return patternsArray.length > 0 ? patternsArray : options.returnRootDirIfEmpty ? [options.rootDir] : [];
+/**
+ * The computed file watch settings
+ */
+export interface WatchSettings {
+  /**
+   * The directory observed for file changes
+   */
+  readonly watchDir: string;
+  /**
+   * List of include patterns for watching files
+   */
+  readonly includes: string[];
+  /**
+   * List of excludes patterns for watching files
+   */
+  readonly excludes: string[];
+}
+
+export interface FileWatchEvent {
+  /**
+   * The change to the path
+   */
+  readonly event: string;
+  /**
+   * The path that has an observed event
+   */
+  readonly path?: string;
 }

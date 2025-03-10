@@ -24,14 +24,14 @@ import {
   loadCurrentTemplateWithNestedStacks,
   type RootTemplateWithNestedStacks,
 } from './nested-stack-helpers';
+import { IoHelper } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 import { debug, warn } from '../../cli/messages';
-import { IIoHost, IoMessaging, ToolkitAction } from '../../toolkit/cli-io-host';
 import { ToolkitError } from '../../toolkit/error';
-import { formatErrorMessage } from '../../util/format-error';
+import { formatErrorMessage } from '../../util';
 import type { SdkProvider } from '../aws-auth/sdk-provider';
 import { type EnvironmentResources, EnvironmentAccess } from '../environment';
 import { HotswapMode, HotswapPropertyOverrides } from '../hotswap/common';
-import { StackActivityMonitor, StackActivityProgress, StackEventPoller, RollbackChoice } from '../stack-events';
+import { StackActivityMonitor, StackEventPoller, RollbackChoice } from '../stack-events';
 import type { Tag } from '../tags';
 import { DEFAULT_TOOLKIT_STACK_NAME } from '../toolkit-info';
 import { makeBodyParameter } from '../util/template-body-parameter';
@@ -64,13 +64,6 @@ export interface DeployStackOptions {
    * @default - Use artifact default
    */
   readonly deployName?: string;
-
-  /**
-   * Don't show stack deployment events, just wait
-   *
-   * @default false
-   */
-  readonly quiet?: boolean;
 
   /**
    * Name of the toolkit stack, if not the default name
@@ -134,21 +127,6 @@ export interface DeployStackOptions {
    * @default true
    */
   readonly usePreviousParameters?: boolean;
-
-  /**
-   * Display mode for stack deployment progress.
-   *
-   * @default - StackActivityProgress.Bar - stack events will be displayed for
-   *   the resource currently being deployed.
-   */
-  readonly progress?: StackActivityProgress;
-
-  /**
-   * Whether we are on a CI system
-   *
-   * @default false
-   */
-  readonly ci?: boolean;
 
   /**
    * Rollback failed deployments
@@ -256,14 +234,6 @@ export interface RollbackStackOptions {
   readonly orphanLogicalIds?: string[];
 
   /**
-   * Display mode for stack deployment progress.
-   *
-   * @default - StackActivityProgress.Bar - stack events will be displayed for
-   *   the resource currently being deployed.
-   */
-  readonly progress?: StackActivityProgress;
-
-  /**
    * Whether to validate the version of the bootstrap stack permissions
    *
    * @default true
@@ -302,15 +272,19 @@ interface PublishStackAssetsOptions extends AssetOptions {
    * Stack name this asset is for
    */
   readonly stackName?: string;
+
+  /**
+   * Always publish, even if it already exists
+   *
+   * @default false
+   */
+  readonly forcePublish?: boolean;
 }
 
 export interface DestroyStackOptions {
   stack: cxapi.CloudFormationStackArtifact;
   deployName?: string;
   roleArn?: string;
-  quiet?: boolean;
-  force?: boolean;
-  ci?: boolean;
 }
 
 export interface StackExistsOptions {
@@ -322,8 +296,7 @@ export interface StackExistsOptions {
 export interface DeploymentsProps {
   readonly sdkProvider: SdkProvider;
   readonly toolkitStackName?: string;
-  readonly ioHost: IIoHost;
-  readonly action: ToolkitAction;
+  readonly ioHelper: IoHelper;
 }
 
 /**
@@ -358,18 +331,16 @@ export class Deployments {
 
   private _allowCrossAccountAssetPublishing: boolean | undefined;
 
-  private readonly ioHost: IIoHost;
-  private readonly action: ToolkitAction;
+  private readonly ioHelper: IoHelper;
 
   constructor(private readonly props: DeploymentsProps) {
     this.assetSdkProvider = props.sdkProvider;
     this.deployStackSdkProvider = props.sdkProvider;
-    this.ioHost = props.ioHost;
-    this.action = props.action;
+    this.ioHelper = props.ioHelper;
     this.envs = new EnvironmentAccess(
       props.sdkProvider,
       props.toolkitStackName ?? DEFAULT_TOOLKIT_STACK_NAME,
-      { ioHost: this.ioHost, action: this.action },
+      this.ioHelper,
     );
   }
 
@@ -389,7 +360,7 @@ export class Deployments {
   }
 
   public async readCurrentTemplate(stackArtifact: cxapi.CloudFormationStackArtifact): Promise<Template> {
-    await this.ioHost.notify(debug(this.action, `Reading existing template for stack ${stackArtifact.displayName}.`));
+    await this.ioHelper.notify(debug(`Reading existing template for stack ${stackArtifact.displayName}.`));
     const env = await this.envs.accessStackForLookupBestEffort(stackArtifact);
     return loadCurrentTemplate(stackArtifact, env.sdk);
   }
@@ -397,7 +368,7 @@ export class Deployments {
   public async resourceIdentifierSummaries(
     stackArtifact: cxapi.CloudFormationStackArtifact,
   ): Promise<ResourceIdentifierSummaries> {
-    await this.ioHost.notify(debug(this.action, `Retrieving template summary for stack ${stackArtifact.displayName}.`));
+    await this.ioHelper.notify(debug(`Retrieving template summary for stack ${stackArtifact.displayName}.`));
     // Currently, needs to use `deploy-role` since it may need to read templates in the staging
     // bucket which have been encrypted with a KMS key (and lookup-role may not read encrypted things)
     const env = await this.envs.accessStackForReadOnlyStackOperations(stackArtifact);
@@ -427,7 +398,7 @@ export class Deployments {
 
     const response = await cfn.getTemplateSummary(cfnParam);
     if (!response.ResourceIdentifierSummaries) {
-      await this.ioHost.notify(debug(this.action, 'GetTemplateSummary API call did not return "ResourceIdentifierSummaries"'));
+      await this.ioHelper.notify(debug('GetTemplateSummary API call did not return "ResourceIdentifierSummaries"'));
     }
     return response.ResourceIdentifierSummaries ?? [];
   }
@@ -463,7 +434,6 @@ export class Deployments {
       resolvedEnvironment: env.resolvedEnvironment,
       deployName: options.deployName,
       notificationArns: options.notificationArns,
-      quiet: options.quiet,
       sdk: env.sdk,
       sdkProvider: this.deployStackSdkProvider,
       roleArn: executionRoleArn,
@@ -474,8 +444,6 @@ export class Deployments {
       force: options.force,
       parameters: options.parameters,
       usePreviousParameters: options.usePreviousParameters,
-      progress: options.progress,
-      ci: options.ci,
       rollback: options.rollback,
       hotswap: options.hotswap,
       hotswapPropertyOverrides: options.hotswapPropertyOverrides,
@@ -483,7 +451,7 @@ export class Deployments {
       resourcesToImport: options.resourcesToImport,
       overrideTemplate: options.overrideTemplate,
       assetParallelism: options.assetParallelism,
-    }, { ioHost: this.ioHost, action: this.action });
+    }, this.ioHelper);
   }
 
   public async rollbackStack(options: RollbackStackOptions): Promise<RollbackStackResult> {
@@ -515,11 +483,11 @@ export class Deployments {
 
       switch (cloudFormationStack.stackStatus.rollbackChoice) {
         case RollbackChoice.NONE:
-          await this.ioHost.notify(warn(this.action, `Stack ${deployName} does not need a rollback: ${cloudFormationStack.stackStatus}`));
+          await this.ioHelper.notify(warn(`Stack ${deployName} does not need a rollback: ${cloudFormationStack.stackStatus}`));
           return { notInRollbackableState: true };
 
         case RollbackChoice.START_ROLLBACK:
-          await this.ioHost.notify(debug(this.action, `Initiating rollback of stack ${deployName}`));
+          await this.ioHelper.notify(debug(`Initiating rollback of stack ${deployName}`));
           await cfn.rollbackStack({
             StackName: deployName,
             RoleARN: executionRoleArn,
@@ -545,7 +513,7 @@ export class Deployments {
           }
 
           const skipDescription = resourcesToSkip.length > 0 ? ` (orphaning: ${resourcesToSkip.join(', ')})` : '';
-          await this.ioHost.notify(warn(this.action, `Continuing rollback of stack ${deployName}${skipDescription}`));
+          await this.ioHelper.notify(warn(`Continuing rollback of stack ${deployName}${skipDescription}`));
           await cfn.continueUpdateRollback({
             StackName: deployName,
             ClientRequestToken: randomUUID(),
@@ -555,8 +523,7 @@ export class Deployments {
           break;
 
         case RollbackChoice.ROLLBACK_FAILED:
-          await this.ioHost.notify(warn(
-            this.action,
+          await this.ioHelper.notify(warn(
             `Stack ${deployName} failed creation and rollback. This state cannot be rolled back. You can recreate this stack by running 'cdk deploy'.`,
           ));
           return { notInRollbackableState: true };
@@ -565,16 +532,18 @@ export class Deployments {
           throw new ToolkitError(`Unexpected rollback choice: ${cloudFormationStack.stackStatus.rollbackChoice}`);
       }
 
-      const monitor = options.quiet
-        ? undefined
-        : StackActivityMonitor.withDefaultPrinter(cfn, deployName, options.stack, {
-          ci: options.ci,
-        }).start();
+      const monitor = new StackActivityMonitor({
+        cfn,
+        stack: options.stack,
+        stackName: deployName,
+        ioHelper: this.ioHelper,
+      });
+      await monitor.start();
 
       let stackErrorMessage: string | undefined = undefined;
       let finalStackState = cloudFormationStack;
       try {
-        const successStack = await stabilizeStack(cfn, { ioHost: this.ioHost, action: this.action }, deployName);
+        const successStack = await stabilizeStack(cfn, this.ioHelper, deployName);
 
         // This shouldn't really happen, but catch it anyway. You never know.
         if (!successStack) {
@@ -582,14 +551,14 @@ export class Deployments {
         }
         finalStackState = successStack;
 
-        const errors = monitor?.errors?.join(', ');
+        const errors = monitor.errors.join(', ');
         if (errors) {
           stackErrorMessage = errors;
         }
       } catch (e: any) {
-        stackErrorMessage = suffixWithErrors(formatErrorMessage(e), monitor?.errors);
+        stackErrorMessage = suffixWithErrors(formatErrorMessage(e), monitor.errors);
       } finally {
-        await monitor?.stop();
+        await monitor.stop();
       }
 
       if (finalStackState.stackStatus.isRollbackSuccess || !stackErrorMessage) {
@@ -620,9 +589,7 @@ export class Deployments {
       roleArn: executionRoleArn,
       stack: options.stack,
       deployName: options.deployName,
-      quiet: options.quiet,
-      ci: options.ci,
-    }, { ioHost: this.ioHost, action: this.action });
+    }, this.ioHelper);
   }
 
   public async stackExists(options: StackExistsOptions): Promise<boolean> {
@@ -664,7 +631,7 @@ export class Deployments {
     const publisher = this.cachedPublisher(assetManifest, resolvedEnvironment, options.stackName);
     await publisher.buildEntry(asset);
     if (publisher.hasFailures) {
-      throw new ToolkitError(`Failed to build asset ${asset.id}`);
+      throw new ToolkitError(`Failed to build asset ${asset.displayName(false)}`);
     }
   }
 
@@ -680,19 +647,19 @@ export class Deployments {
 
     // No need to validate anymore, we already did that during build
     const publisher = this.cachedPublisher(assetManifest, stackEnv, options.stackName);
-    await publisher.publishEntry(asset, { allowCrossAccount: await this.allowCrossAccountAssetPublishingForEnv(options.stack) });
+    await publisher.publishEntry(asset, {
+      allowCrossAccount: await this.allowCrossAccountAssetPublishingForEnv(options.stack),
+      force: options.forcePublish,
+    });
     if (publisher.hasFailures) {
-      throw new ToolkitError(`Failed to publish asset ${asset.id}`);
+      throw new ToolkitError(`Failed to publish asset ${asset.displayName(true)}`);
     }
   }
 
   private async allowCrossAccountAssetPublishingForEnv(stack: cxapi.CloudFormationStackArtifact): Promise<boolean> {
     if (this._allowCrossAccountAssetPublishing === undefined) {
       const env = await this.envs.accessStackForReadOnlyStackOperations(stack);
-      this._allowCrossAccountAssetPublishing = await determineAllowCrossAccountAssetPublishing(env.sdk, {
-        ioHost: this.ioHost,
-        action: this.action,
-      }, this.props.toolkitStackName);
+      this._allowCrossAccountAssetPublishing = await determineAllowCrossAccountAssetPublishing(env.sdk, this.ioHelper, this.props.toolkitStackName);
     }
     return this._allowCrossAccountAssetPublishing;
   }
@@ -738,7 +705,7 @@ export class Deployments {
       // The AssetPublishing class takes care of role assuming etc, so it's okay to
       // give it a direct `SdkProvider`.
       aws: new PublishingAws(this.assetSdkProvider, env),
-      progressListener: new ParallelSafeAssetProgress(prefix, { ioHost: this.ioHost, action: this.action }),
+      progressListener: new ParallelSafeAssetProgress(prefix, this.ioHelper),
     });
     this.publisherCache.set(assetManifest, publisher);
     return publisher;
@@ -751,8 +718,8 @@ export class Deployments {
 class ParallelSafeAssetProgress extends BasePublishProgressListener {
   private readonly prefix: string;
 
-  constructor(prefix: string, { ioHost, action }: IoMessaging) {
-    super({ ioHost, action });
+  constructor(prefix: string, ioHelper: IoHelper) {
+    super(ioHelper);
     this.prefix = prefix;
   }
 

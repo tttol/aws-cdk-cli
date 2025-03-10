@@ -13,6 +13,15 @@ import * as integ from './integ-tests';
 // see exec.ts#createAssembly
 export const VERSION_MISMATCH: string = 'Cloud assembly schema version mismatch';
 
+/**
+ * CLI version is created at build and release time
+ *
+ * It needs to be .gitignore'd, otherwise the projen 'no uncommitted
+ * changes' self-check will fail, which means it needs to be generated
+ * at build time if it doesn't already exist.
+ */
+import CLI_VERSION = require('../cli-version.json');
+
 import ASSETS_SCHEMA = require('../schema/assets.schema.json');
 
 import ASSEMBLY_SCHEMA = require('../schema/cloud-assembly.schema.json');
@@ -142,6 +151,14 @@ export class Manifest {
   }
 
   /**
+   * Return the CLI version that supports this Cloud Assembly Schema version
+   */
+  public static cliVersion(): string | undefined {
+    const version = CLI_VERSION.version;
+    return version ? version : undefined;
+  }
+
+  /**
    * Deprecated
    * @deprecated use `saveAssemblyManifest()`
    */
@@ -216,7 +233,11 @@ export class Manifest {
     schema: jsonschema.Schema,
     preprocess?: (obj: any) => any,
   ) {
-    let withVersion = { ...manifest, version: Manifest.version() };
+    let withVersion = {
+      ...manifest,
+      version: Manifest.version(),
+      minimumCliVersion: Manifest.cliVersion(),
+    } satisfies assembly.AssemblyManifest;
     Manifest.validate(withVersion, schema);
     if (preprocess) {
       withVersion = preprocess(withVersion);
@@ -259,7 +280,7 @@ export class Manifest {
    * Ideally, we would start writing the `camelCased` and translate to how CloudFormation expects it when needed. But this requires nasty
    * backwards-compatibility code and it just doesn't seem to be worth the effort.
    */
-  private static patchStackTagsOnRead(manifest: assembly.AssemblyManifest) {
+  private static patchStackTagsOnRead(this: void, manifest: assembly.AssemblyManifest) {
     return Manifest.replaceStackTags(manifest, (tags) =>
       tags.map((diskTag: any) => ({
         key: diskTag.Key,
@@ -273,6 +294,7 @@ export class Manifest {
    * should have dedicated properties preceding this (e.g `assumeRoleArn` and `assumeRoleExternalId`).
    */
   private static validateAssumeRoleAdditionalOptions(
+    this: void,
     instance: any,
     key: string,
     _schema: jsonschema.Schema,
@@ -301,7 +323,7 @@ export class Manifest {
    *
    * Translate stack tags metadata if it has the "right" casing.
    */
-  private static patchStackTagsOnWrite(manifest: assembly.AssemblyManifest) {
+  private static patchStackTagsOnWrite(this: void, manifest: assembly.AssemblyManifest) {
     return Manifest.replaceStackTags(manifest, (tags) =>
       tags.map(
         (memTag) =>

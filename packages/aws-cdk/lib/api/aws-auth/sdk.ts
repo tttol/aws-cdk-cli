@@ -20,6 +20,15 @@ import {
   type UpdateResolverCommandOutput,
 } from '@aws-sdk/client-appsync';
 import {
+  CloudControlClient,
+  GetResourceCommand,
+  GetResourceCommandInput,
+  GetResourceCommandOutput,
+  ListResourcesCommand,
+  ListResourcesCommandInput,
+  ListResourcesCommandOutput,
+} from '@aws-sdk/client-cloudcontrol';
+import {
   CloudFormationClient,
   ContinueUpdateRollbackCommand,
   ContinueUpdateRollbackCommandInput,
@@ -321,7 +330,7 @@ import { traceMemberMethods } from './tracing';
 import { defaultCliUserAgent } from './user-agent';
 import { debug } from '../../logging';
 import { AuthenticationError } from '../../toolkit/error';
-import { formatErrorMessage } from '../../util/format-error';
+import { formatErrorMessage } from '../../util';
 
 export interface S3ClientOptions {
   /**
@@ -369,6 +378,11 @@ export interface IAppSyncClient {
   updateResolver(input: UpdateResolverCommandInput): Promise<UpdateResolverCommandOutput>;
   // Pagination functions
   listFunctions(input: ListFunctionsCommandInput): Promise<FunctionConfiguration[]>;
+}
+
+export interface ICloudControlClient{
+  listResources(input: ListResourcesCommandInput): Promise<ListResourcesCommandOutput>;
+  getResource(input: GetResourceCommandInput): Promise<GetResourceCommandOutput>;
 }
 
 export interface ICloudFormationClient {
@@ -600,6 +614,16 @@ export class SDK {
         }
         return functions;
       },
+    };
+  }
+
+  public cloudControl(): ICloudControlClient {
+    const client = new CloudControlClient(this.config);
+    return {
+      listResources: (input: ListResourcesCommandInput): Promise<ListResourcesCommandOutput> =>
+        client.send(new ListResourcesCommand(input)),
+      getResource: (input: GetResourceCommandInput): Promise<GetResourceCommandOutput> =>
+        client.send(new GetResourceCommand(input)),
     };
   }
 

@@ -4,11 +4,10 @@ import * as cxapi from '@aws-cdk/cx-api';
 import type { BootstrapEnvironmentOptions, BootstrappingParameters } from './bootstrap-props';
 import { BootstrapStack, bootstrapVersionFromTemplate } from './deploy-bootstrap';
 import { legacyBootstrapTemplate } from './legacy-template';
+import { IoHelper } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 import { warn } from '../../cli/messages';
-import { IoMessaging } from '../../toolkit/cli-io-host';
 import { ToolkitError } from '../../toolkit/error';
-import { rootDir } from '../../util/directories';
-import { loadStructuredFile, serializeStructure } from '../../util/serialize';
+import { bundledPackageRootDir, loadStructuredFile, serializeStructure } from '../../util';
 import type { SDK, SdkProvider } from '../aws-auth';
 import type { SuccessfulDeployStackResult } from '../deployments';
 import { Mode } from '../plugin/mode';
@@ -17,10 +16,13 @@ import { DEFAULT_TOOLKIT_STACK_NAME } from '../toolkit-info';
 export type BootstrapSource = { source: 'legacy' } | { source: 'default' } | { source: 'custom'; templateFile: string };
 
 export class Bootstrapper {
+  private readonly ioHelper: IoHelper;
+
   constructor(
     private readonly source: BootstrapSource = { source: 'default' },
-    private readonly msg: IoMessaging,
+    ioHelper: IoHelper,
   ) {
+    this.ioHelper = ioHelper;
   }
 
   public bootstrapEnvironment(
@@ -68,7 +70,7 @@ export class Bootstrapper {
     }
 
     const toolkitStackName = options.toolkitStackName ?? DEFAULT_TOOLKIT_STACK_NAME;
-    const current = await BootstrapStack.lookup(sdkProvider, environment, toolkitStackName, this.msg);
+    const current = await BootstrapStack.lookup(sdkProvider, environment, toolkitStackName, this.ioHelper);
     return current.update(
       await this.loadTemplate(params),
       {},
@@ -93,7 +95,7 @@ export class Bootstrapper {
     const bootstrapTemplate = await this.loadTemplate();
 
     const toolkitStackName = options.toolkitStackName ?? DEFAULT_TOOLKIT_STACK_NAME;
-    const current = await BootstrapStack.lookup(sdkProvider, environment, toolkitStackName, this.msg);
+    const current = await BootstrapStack.lookup(sdkProvider, environment, toolkitStackName, this.ioHelper);
     const partition = await current.partition();
 
     if (params.createCustomerMasterKey !== undefined && params.kmsKeyId) {
@@ -149,8 +151,7 @@ export class Bootstrapper {
       // Would leave AdministratorAccess policies with a trust relationship, without the user explicitly
       // approving the trust policy.
       const implicitPolicy = `arn:${partition}:iam::aws:policy/AdministratorAccess`;
-      await this.msg.ioHost.notify(warn(
-        this.msg.action,
+      await this.ioHelper.notify(warn(
         `Using default execution policy of '${implicitPolicy}'. Pass '--cloudformation-execution-policies' to customize.`,
       ));
     } else if (cloudFormationExecutionPolicies.length === 0) {
@@ -198,18 +199,15 @@ export class Bootstrapper {
     }
     if (currentPermissionsBoundary !== policyName) {
       if (!currentPermissionsBoundary) {
-        await this.msg.ioHost.notify(warn(
-          this.msg.action,
+        await this.ioHelper.notify(warn(
           `Adding new permissions boundary ${policyName}`,
         ));
       } else if (!policyName) {
-        await this.msg.ioHost.notify(warn(
-          this.msg.action,
+        await this.ioHelper.notify(warn(
           `Removing existing permissions boundary ${currentPermissionsBoundary}`,
         ));
       } else {
-        await this.msg.ioHost.notify(warn(
-          this.msg.action,
+        await this.ioHelper.notify(warn(
           `Changing permissions boundary from ${currentPermissionsBoundary} to ${policyName}`,
         ));
       }
@@ -375,7 +373,7 @@ export class Bootstrapper {
       case 'custom':
         return loadStructuredFile(this.source.templateFile);
       case 'default':
-        return loadStructuredFile(path.join(rootDir(), 'lib', 'api', 'bootstrap', 'bootstrap-template.yaml'));
+        return loadStructuredFile(path.join(bundledPackageRootDir(__dirname), 'lib', 'api', 'bootstrap', 'bootstrap-template.yaml'));
       case 'legacy':
         return legacyBootstrapTemplate(params);
     }

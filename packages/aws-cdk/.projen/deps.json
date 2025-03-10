@@ -13,6 +13,10 @@
       "type": "build"
     },
     {
+      "name": "@aws-cdk/tmp-toolkit-helpers",
+      "type": "build"
+    },
+    {
       "name": "@aws-cdk/user-input-gen",
       "type": "build"
     },
@@ -42,10 +46,6 @@
       "type": "build"
     },
     {
-      "name": "@types/glob",
-      "type": "build"
-    },
-    {
       "name": "@types/jest",
       "type": "build"
     },
@@ -68,14 +68,6 @@
     },
     {
       "name": "@types/sinon",
-      "type": "build"
-    },
-    {
-      "name": "@types/source-map-support",
-      "type": "build"
-    },
-    {
-      "name": "@types/uuid",
       "type": "build"
     },
     {
@@ -170,10 +162,6 @@
       "type": "build"
     },
     {
-      "name": "make-runnable",
-      "type": "build"
-    },
-    {
       "name": "nock",
       "type": "build"
     },
@@ -225,102 +213,107 @@
     },
     {
       "name": "@aws-sdk/client-appsync",
-      "version": "3.741",
+      "version": "^3",
+      "type": "runtime"
+    },
+    {
+      "name": "@aws-sdk/client-cloudcontrol",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-cloudformation",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-cloudwatch-logs",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-codebuild",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-ec2",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-ecr",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-ecs",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-elastic-load-balancing-v2",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-iam",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-kms",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-lambda",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-route-53",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-s3",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-secrets-manager",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-sfn",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-ssm",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/client-sts",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/credential-providers",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/ec2-metadata-service",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
       "name": "@aws-sdk/lib-storage",
-      "version": "3.741",
+      "version": "^3",
       "type": "runtime"
     },
     {
@@ -333,10 +326,6 @@
     },
     {
       "name": "@aws-sdk/util-waiter",
-      "type": "runtime"
-    },
-    {
-      "name": "@jsii/check-node",
       "type": "runtime"
     },
     {
@@ -410,10 +399,6 @@
       "type": "runtime"
     },
     {
-      "name": "json-diff",
-      "type": "runtime"
-    },
-    {
       "name": "minimatch",
       "type": "runtime"
     },
@@ -432,10 +417,6 @@
     },
     {
       "name": "semver",
-      "type": "runtime"
-    },
-    {
-      "name": "source-map-support",
       "type": "runtime"
     },
     {

@@ -1,9 +1,9 @@
-/* eslint-disable import/no-extraneous-dependencies */
+/* eslint-disable import/no-extraneous-dependencies,@typescript-eslint/unbound-method */
 /**
  * A Jest environment that buffers outputs to `console.log()` and only shows it for failing tests.
  */
 import type { EnvironmentContext, JestEnvironment, JestEnvironmentConfig } from '@jest/environment';
-import { Circus } from '@jest/types';
+import type { Circus } from '@jest/types';
 import { TestEnvironment as NodeEnvironment } from 'jest-environment-node';
 
 interface ConsoleMessage {

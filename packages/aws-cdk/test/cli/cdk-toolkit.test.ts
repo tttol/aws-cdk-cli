@@ -18,8 +18,8 @@ const fakeChokidarWatcherOn = {
   },
 
   get fileEventCallback(): (
-  event: 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir',
-  path: string,
+    event: 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir',
+    path: string,
   ) => Promise<void> {
     expect(mockChokidarWatcherOn.mock.calls.length).toBeGreaterThanOrEqual(2);
     const secondCall = mockChokidarWatcherOn.mock.calls[1];
@@ -60,6 +60,7 @@ jest.setTimeout(30_000);
 import 'aws-sdk-client-mock';
 import * as os from 'os';
 import * as path from 'path';
+import * as cdkAssets from 'cdk-assets';
 import * as cxschema from '@aws-cdk/cloud-assembly-schema';
 import { Manifest } from '@aws-cdk/cloud-assembly-schema';
 import * as cxapi from '@aws-cdk/cx-api';
@@ -95,6 +96,7 @@ import {
   mockSSMClient,
   restoreSdkMocksToDefault,
 } from '../util/mock-sdk';
+import { asIoHelper } from '../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 
 markTesting();
 
@@ -102,6 +104,8 @@ const defaultBootstrapSource: BootstrapSource = { source: 'default' };
 const bootstrapEnvironmentMock = jest.spyOn(Bootstrapper.prototype, 'bootstrapEnvironment');
 let cloudExecutable: MockCloudExecutable;
 let stderrMock: jest.SpyInstance;
+let ioHelper = asIoHelper(CliIoHost.instance(), 'deploy');
+
 beforeEach(() => {
   jest.resetAllMocks();
   restoreSdkMocksToDefault();
@@ -223,8 +227,7 @@ describe('readCurrentTemplate', () => {
       sdkProvider: mockCloudExecutable.sdkProvider,
       deployments: new Deployments({
         sdkProvider: mockCloudExecutable.sdkProvider,
-        ioHost: CliIoHost.instance(),
-        action: 'deploy',
+        ioHelper,
       }),
     });
 
@@ -264,8 +267,7 @@ describe('readCurrentTemplate', () => {
       sdkProvider: mockCloudExecutable.sdkProvider,
       deployments: new Deployments({
         sdkProvider: mockCloudExecutable.sdkProvider,
-        ioHost: CliIoHost.instance(),
-        action: 'deploy',
+        ioHelper,
       }),
     });
 
@@ -330,8 +332,7 @@ describe('readCurrentTemplate', () => {
       sdkProvider: mockCloudExecutable.sdkProvider,
       deployments: new Deployments({
         sdkProvider: mockCloudExecutable.sdkProvider,
-        ioHost: CliIoHost.instance(),
-        action: 'deploy',
+        ioHelper,
       }),
     });
 
@@ -387,8 +388,7 @@ describe('readCurrentTemplate', () => {
       sdkProvider: mockCloudExecutable.sdkProvider,
       deployments: new Deployments({
         sdkProvider: mockCloudExecutable.sdkProvider,
-        ioHost: CliIoHost.instance(),
-        action: 'deploy',
+        ioHelper,
       }),
     });
 
@@ -444,8 +444,7 @@ describe('readCurrentTemplate', () => {
       sdkProvider: mockCloudExecutable.sdkProvider,
       deployments: new Deployments({
         sdkProvider: mockCloudExecutable.sdkProvider,
-        ioHost: CliIoHost.instance(),
-        action: 'deploy',
+        ioHelper,
       }),
     });
 
@@ -498,8 +497,7 @@ describe('readCurrentTemplate', () => {
       sdkProvider: mockCloudExecutable.sdkProvider,
       deployments: new Deployments({
         sdkProvider: mockCloudExecutable.sdkProvider,
-        ioHost: CliIoHost.instance(),
-        action: 'deploy',
+        ioHelper,
       }),
     });
 
@@ -654,6 +652,61 @@ describe('deploy', () => {
         selector: { patterns: ['Test-Stack-A-Display-Name'] },
         hotswap: HotswapMode.FULL_DEPLOYMENT,
       });
+    });
+
+    test('uses display names to reference assets', async () => {
+      // GIVEN
+      cloudExecutable = new MockCloudExecutable({
+        stacks: [MockStack.MOCK_STACK_WITH_ASSET],
+      });
+      const toolkit = new CdkToolkit({
+        cloudExecutable,
+        configuration: cloudExecutable.configuration,
+        sdkProvider: cloudExecutable.sdkProvider,
+        deployments: new FakeCloudFormation({}),
+      });
+      stderrMock.mockImplementation((...x) => {
+        console.error(...x);
+      });
+
+      // WHEN
+      await toolkit.deploy({
+        selector: { patterns: [MockStack.MOCK_STACK_WITH_ASSET.stackName] },
+        hotswap: HotswapMode.FULL_DEPLOYMENT,
+      });
+
+      // THEN
+      expect(stderrMock).toHaveBeenCalledWith(expect.stringContaining('Building Asset Display Name'));
+      expect(stderrMock).toHaveBeenCalledWith(expect.stringContaining('Publishing Asset Display Name (desto)'));
+    });
+
+    test('force flag is passed to asset publishing', async () => {
+      // GIVEN
+      cloudExecutable = new MockCloudExecutable({
+        stacks: [MockStack.MOCK_STACK_WITH_ASSET],
+      });
+      const toolkit = new CdkToolkit({
+        cloudExecutable,
+        configuration: cloudExecutable.configuration,
+        sdkProvider: cloudExecutable.sdkProvider,
+        deployments: new FakeCloudFormation({}),
+      });
+
+      const publishEntry = jest.spyOn(cdkAssets.AssetPublishing.prototype, 'publishEntry');
+
+      // WHEN
+      await toolkit.deploy({
+        selector: { patterns: [MockStack.MOCK_STACK_WITH_ASSET.stackName] },
+        hotswap: HotswapMode.FULL_DEPLOYMENT,
+        force: true,
+      });
+
+      // THEN
+      expect(publishEntry).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        force: true,
+      }));
+
+      publishEntry.mockRestore();
     });
 
     test('with stacks all stacks specified as wildcard', async () => {
@@ -982,7 +1035,7 @@ describe('watch', () => {
       });
     }).rejects.toThrow(
       "Cannot use the 'watch' command without specifying at least one directory to monitor. " +
-        'Make sure to add a "watch" key to your cdk.json',
+      'Make sure to add a "watch" key to your cdk.json',
     );
   });
 
@@ -1280,8 +1333,7 @@ describe('synth', () => {
         cloudExecutable: mockCloudExecutable,
         deployments: new Deployments({
           sdkProvider: mockSdkProvider,
-          ioHost: CliIoHost.instance(),
-          action: 'deploy',
+          ioHelper: asIoHelper(CliIoHost.instance(), 'deploy'),
         }),
         sdkProvider: mockSdkProvider,
         configuration: mockCloudExecutable.configuration,
@@ -1483,8 +1535,7 @@ describe('synth', () => {
       sdkProvider: cloudExecutable.sdkProvider,
       deployments: new Deployments({
         sdkProvider: new MockSdkProvider(),
-        ioHost: CliIoHost.instance(),
-        action: 'deploy',
+        ioHelper,
       }),
     });
 
@@ -1510,8 +1561,7 @@ describe('synth', () => {
 
     const deployments = new Deployments({
       sdkProvider: new MockSdkProvider(),
-      ioHost: CliIoHost.instance(),
-      action: 'deploy',
+      ioHelper,
     });
 
     // Rollback might be called -- just don't do anything.
@@ -1640,10 +1690,16 @@ class MockStack {
       version: Manifest.version(),
       files: {
         xyz: {
+          displayName: 'Asset Display Name',
           source: {
-            path: path.resolve(__dirname, '..', 'LICENSE'),
+            path: path.resolve(__dirname, '..', '..', 'LICENSE'),
           },
-          destinations: {},
+          destinations: {
+            desto: {
+              bucketName: 'some-bucket',
+              objectKey: 'some-key',
+            },
+          },
         },
       },
     },
@@ -1689,8 +1745,7 @@ class FakeCloudFormation extends Deployments {
   ) {
     super({
       sdkProvider: new MockSdkProvider(),
-      ioHost: CliIoHost.instance(),
-      action: 'deploy',
+      ioHelper,
     });
 
     for (const [stackName, tags] of Object.entries(expectedTags)) {
@@ -1765,7 +1820,7 @@ class FakeCloudFormation extends Deployments {
 }
 
 function cliTest(name: string, handler: (dir: string) => void | Promise<any>): void {
-  test(name, () => withTempDir(handler));
+  test(name, () => withTempDir(handler), 120000);
 }
 
 async function withTempDir(cb: (dir: string) => void | Promise<any>) {

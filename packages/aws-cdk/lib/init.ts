@@ -2,13 +2,12 @@ import * as childProcess from 'child_process';
 import * as path from 'path';
 import * as chalk from 'chalk';
 import * as fs from 'fs-extra';
+import { cliRootDir } from './cli/root-dir';
 import { versionNumber } from './cli/version';
 import { invokeBuiltinHooks } from './init-hooks';
 import { error, info, warning } from './logging';
 import { ToolkitError } from './toolkit/error';
-import { cdkHomeDir, rootDir } from './util/directories';
-import { formatErrorMessage } from './util/format-error';
-import { rangeFromSemver } from './util/version-range';
+import { cdkHomeDir, formatErrorMessage, rangeFromSemver } from './util';
 
 /* eslint-disable @typescript-eslint/no-var-requires */ // Packages don't have @types module
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -24,6 +23,11 @@ export interface CliInitOptions {
   readonly workDir?: string;
   readonly stackName?: string;
   readonly migrate?: boolean;
+
+  /**
+   * Override the built-in CDK version
+   */
+  readonly libVersion?: string;
 }
 
 /**
@@ -64,6 +68,7 @@ export async function cliInit(options: CliInitOptions) {
     workDir,
     options.stackName,
     options.migrate,
+    options.libVersion,
   );
 }
 
@@ -116,7 +121,7 @@ export class InitTemplate {
    * @param language    the language to instantiate this template with
    * @param targetDirectory the directory where the template is to be instantiated into
    */
-  public async install(language: string, targetDirectory: string, stackName?: string) {
+  public async install(language: string, targetDirectory: string, stackName?: string, libVersion?: string) {
     if (this.languages.indexOf(language) === -1) {
       error(
         `The ${chalk.blue(language)} language is not supported for ${chalk.green(this.name)} ` +
@@ -130,6 +135,10 @@ export class InitTemplate {
       stackName,
       versions: await loadInitVersions(),
     };
+
+    if (libVersion) {
+      projectInfo.versions['aws-cdk-lib'] = libVersion;
+    }
 
     const sourceDirectory = path.join(this.basePath, language);
 
@@ -258,7 +267,7 @@ interface ProjectInfo {
 export async function availableInitTemplates(): Promise<InitTemplate[]> {
   return new Promise(async (resolve) => {
     try {
-      const templatesDir = path.join(rootDir(), 'lib', 'init-templates');
+      const templatesDir = path.join(cliRootDir(), 'lib', 'init-templates');
       const templateNames = await listDirectory(templatesDir);
       const templates = new Array<InitTemplate>();
       for (const templateName of templateNames) {
@@ -323,10 +332,11 @@ async function initializeProject(
   workDir: string,
   stackName?: string,
   migrate?: boolean,
+  cdkVersion?: string,
 ) {
   await assertIsEmptyDirectory(workDir);
   info(`Applying project template ${chalk.green(template.name)} for ${chalk.blue(language)}`);
-  await template.install(language, workDir, stackName);
+  await template.install(language, workDir, stackName, cdkVersion);
   if (migrate) {
     await template.addMigrateContext(workDir);
   }
@@ -490,8 +500,8 @@ interface Versions {
  * This has been built into the CLI at build time.
  */
 async function loadInitVersions(): Promise<Versions> {
-  const recommendedFlagsFile = path.join(__dirname, './init-templates/.init-version.json');
-  const contents = JSON.parse(await fs.readFile(recommendedFlagsFile, { encoding: 'utf-8' }));
+  const initVersionFile = path.join(__dirname, './init-templates/.init-version.json');
+  const contents = JSON.parse(await fs.readFile(initVersionFile, { encoding: 'utf-8' }));
 
   const ret = {
     'aws-cdk-lib': contents['aws-cdk-lib'],
@@ -501,7 +511,7 @@ async function loadInitVersions(): Promise<Versions> {
   for (const [key, value] of Object.entries(ret)) {
     /* istanbul ignore next */
     if (!value) {
-      throw new ToolkitError(`Missing init version from ${recommendedFlagsFile}: ${key}`);
+      throw new ToolkitError(`Missing init version from ${initVersionFile}: ${key}`);
     }
   }
 
