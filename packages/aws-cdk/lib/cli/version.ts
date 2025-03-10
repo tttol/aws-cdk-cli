@@ -88,7 +88,7 @@ export async function getVersionMessages(currentVersion: string, cacheFile: Vers
     return [];
   }
 
-  const packageInfo = await execNpmView();
+  const packageInfo = await execNpmView(currentVersion);
   const latestVersion = packageInfo.version;
   await cacheFile.update(latestVersion);
 

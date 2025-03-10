@@ -26,7 +26,7 @@ describe('npm.ts', () => {
         stderr: '',
       });
 
-      const result = await execNpmView();
+      const result = await execNpmView('0.0.0');
 
       expect(result).toEqual({
         version: '0.0.0',
@@ -40,7 +40,7 @@ describe('npm.ts', () => {
         stderr: '',
       });
 
-      const result = await execNpmView();
+      const result = await execNpmView('1.0.0');
 
       expect(result).toEqual({
         version: '1.0.0',
@@ -51,7 +51,7 @@ describe('npm.ts', () => {
     test('throws error when npm command fails', async () => {
       mockedExec.mockRejectedValue(new Error('npm ERR! code E404\nnpm ERR! 404 Not Found'));
 
-      await expect(execNpmView()).rejects.toThrow();
+      await expect(execNpmView('1.0.0')).rejects.toThrow();
     });
   });
 }); 
