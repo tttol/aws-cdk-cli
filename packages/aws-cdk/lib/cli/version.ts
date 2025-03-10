@@ -8,7 +8,6 @@ import { ToolkitError } from '../toolkit/error';
 import { cdkCacheDir } from '../util';
 import { cliRootDir } from './root-dir';
 import { formatAsBanner } from './util/console-formatters';
-import { getLatestVersionFromNpm } from './util/npm';
 import { execNpmView } from './util/npm';
 
 const ONE_DAY_IN_SECONDS = 1 * 24 * 60 * 60;
@@ -91,7 +90,7 @@ export async function getVersionMessages(currentVersion: string, cacheFile: Vers
   }
 
   const packageInfo = await execNpmView(currentVersion);
-  const latestVersion = packageInfo.version;
+  const latestVersion = packageInfo.latestVersion;
   await cacheFile.update(latestVersion);
 
   if (semver.eq(latestVersion, currentVersion)) {

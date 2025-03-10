@@ -91,8 +91,7 @@ describe('version message', () => {
     jest.spyOn(mockCache, 'hasExpired').mockResolvedValue(true);
     
     jest.spyOn(npm, 'execNpmView').mockResolvedValue({
-      version: '2.0.0',
-      name: 'aws-cdk',
+      latestVersion: '2.0.0',
       deprecated: undefined,
     });
     
@@ -107,8 +106,7 @@ describe('version message', () => {
     jest.spyOn(mockCache, 'hasExpired').mockResolvedValue(true);
     
     jest.spyOn(npm, 'execNpmView').mockResolvedValue({
-      version: '2.1000.0',
-      name: 'aws-cdk',
+      latestVersion: '2.1000.0',
       deprecated: undefined,
     });
     
@@ -124,8 +122,7 @@ describe('version message', () => {
     jest.spyOn(mockCache, 'hasExpired').mockResolvedValue(true);
     
     jest.spyOn(npm, 'execNpmView').mockResolvedValue({
-      version: '2.0.0',
-      name: 'aws-cdk',
+      latestVersion: '2.0.0',
       deprecated: 'This version is deprecated.',
     });
     
@@ -138,8 +135,7 @@ describe('version message', () => {
     jest.spyOn(mockCache, 'hasExpired').mockResolvedValue(true);
     
     jest.spyOn(npm, 'execNpmView').mockResolvedValue({
-      version: '1.0.0',
-      name: 'aws-cdk',
+      latestVersion: '1.0.0',
       deprecated: undefined,
     });
     
