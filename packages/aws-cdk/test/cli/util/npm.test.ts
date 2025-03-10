@@ -1,4 +1,4 @@
-import { checkIfDeprecated } from '../../../lib/cli/util/npm';
+import { execNpmView } from '../../../lib/cli/util/npm';
 
 jest.mock('util', () => {
   const mockExec = jest.fn();
@@ -19,37 +19,39 @@ describe('npm.ts', () => {
     jest.resetAllMocks();
   });
 
-  describe('checkIfDeprecated', () => {
-    test('returns null for non-deprecated version', async () => {
+  describe('execNpmView', () => {
+    test('returns version, deprecated and name message', async () => {
       mockedExec.mockResolvedValue({
-        stdout: '',
+        stdout: '{"version": "0.0.0","deprecated": "This version has been deprecated.", "name": "aws-cdk"}',
         stderr: '',
       });
 
-      const result = await checkIfDeprecated('2.1.0');
+      const result = await execNpmView();
 
-      expect(result).toBeNull();
-      expect(mockedExec).toHaveBeenCalledWith('npm view aws-cdk@2.1.0 deprecated --silent', { timeout: 3000 });
-    });
-
-    test('returns deprecation message for deprecated version', async () => {
-      const deprecationMessage = 'This version has been deprecated';
-      mockedExec.mockImplementation(() => Promise.resolve({
-        stdout: deprecationMessage,
+      expect(result).toEqual({
+        version: '0.0.0',
+        deprecated: 'This version has been deprecated.',
+        name: 'aws-cdk',
+      });
+    }); 
+    test('returns no deprecated field', async () => {
+      mockedExec.mockResolvedValue({
+        stdout: '{"version": "1.0.0", "name": "aws-cdk"}',
         stderr: '',
-      }));
+      });
 
-      const result = await checkIfDeprecated('1.0.0');
+      const result = await execNpmView();
 
-      expect(result).toBe(deprecationMessage);
-    });
+      expect(result).toEqual({
+        version: '1.0.0',
+        name: 'aws-cdk',
+      });
+      expect(result.deprecated).toBeUndefined();
+    }); 
+    test('throws error when npm command fails', async () => {
+      mockedExec.mockRejectedValue(new Error('npm ERR! code E404\nnpm ERR! 404 Not Found'));
 
-    test('returns null when error occurs', async () => {
-      mockedExec.mockImplementation(() => Promise.reject(new Error('npm error')));
-
-      const result = await checkIfDeprecated('2.1.0');
-
-      expect(result).toBeNull();
+      await expect(execNpmView()).rejects.toThrow();
     });
   });
 }); 
