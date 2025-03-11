@@ -91,14 +91,15 @@ export async function getVersionMessages(currentVersion: string, cacheFile: Vers
 
   const packageInfo = await execNpmView(currentVersion);
   const latestVersion = packageInfo.latestVersion;
-  await cacheFile.update(latestVersion);
+  await cacheFile.update(JSON.stringify(packageInfo));
 
+  // If the latest version is the same as the current version, there is no need to display a message
   if (semver.eq(latestVersion, currentVersion)) {
     return [];
   }
 
   const versionMessage = [
-    `${chalk.red(packageInfo.deprecated as string)}`,
+    packageInfo.deprecated ? `${chalk.red(packageInfo.deprecated as string)}` : undefined,
     `Newer version of CDK is available [${chalk.green(latestVersion as string)}]`,
     getMajorVersionUpgradeMessage(currentVersion),
     'Upgrade recommended (npm install -g aws-cdk)',
