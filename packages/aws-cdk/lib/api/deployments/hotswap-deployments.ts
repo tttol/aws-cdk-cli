@@ -3,6 +3,8 @@ import * as cfn_diff from '@aws-cdk/cloudformation-diff';
 import type * as cxapi from '@aws-cdk/cx-api';
 import type { WaiterResult } from '@smithy/util-waiter';
 import * as chalk from 'chalk';
+import type { ResourceChange } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/payloads';
+import type { IoHelper } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 import type { SDK, SdkProvider } from '../aws-auth';
 import type { CloudFormationStack } from './cloudformation';
 import type { NestedStackTemplates } from './nested-stack-helpers';
@@ -15,10 +17,10 @@ import { isHotswappableAppSyncChange } from '../hotswap/appsync-mapping-template
 import { isHotswappableCodeBuildProjectChange } from '../hotswap/code-build-projects';
 import type {
   ChangeHotswapResult,
-  HotswappableChange,
+  HotswapOperation,
   NonHotswappableChange,
-  HotswappableChangeCandidate,
-  HotswapPropertyOverrides, ClassifiedResourceChanges,
+  HotswapPropertyOverrides,
+  ClassifiedResourceChanges,
 } from '../hotswap/common';
 import {
   ICON,
@@ -35,7 +37,6 @@ import {
 import { isHotswappableStateMachineChange } from '../hotswap/stepfunctions-state-machines';
 import { Mode } from '../plugin';
 import type { SuccessfulDeployStackResult } from './deployment-result';
-import type { IoHelper } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 
 // Must use a require() otherwise esbuild complains about calling a namespace
 // eslint-disable-next-line @typescript-eslint/no-require-imports,@typescript-eslint/consistent-type-imports
@@ -43,7 +44,7 @@ const pLimit: typeof import('p-limit') = require('p-limit');
 
 type HotswapDetector = (
   logicalId: string,
-  change: HotswappableChangeCandidate,
+  change: ResourceChange,
   evaluateCfnTemplate: EvaluateCloudFormationTemplate,
   hotswapPropertyOverrides: HotswapPropertyOverrides,
 ) => Promise<ChangeHotswapResult>;
@@ -66,7 +67,7 @@ const RESOURCE_DETECTORS: { [key: string]: HotswapDetector } = {
   'Custom::CDKBucketDeployment': isHotswappableS3BucketDeploymentChange,
   'AWS::IAM::Policy': async (
     logicalId: string,
-    change: HotswappableChangeCandidate,
+    change: ResourceChange,
     evaluateCfnTemplate: EvaluateCloudFormationTemplate,
   ): Promise<ChangeHotswapResult> => {
     // If the policy is for a S3BucketDeploymentChange, we can ignore the change
@@ -154,7 +155,7 @@ async function classifyResourceChanges(
   const resourceDifferences = getStackResourceDifferences(stackChanges);
 
   const promises: Array<() => Promise<ChangeHotswapResult>> = [];
-  const hotswappableResources = new Array<HotswappableChange>();
+  const hotswappableResources = new Array<HotswapOperation>();
   const nonHotswappableResources = new Array<NonHotswappableChange>();
   for (const logicalId of Object.keys(stackChanges.outputs.changes)) {
     nonHotswappableResources.push({
@@ -323,7 +324,8 @@ async function findNestedHotswappableChanges(
     evaluateNestedCfnTemplate,
     sdk,
     nestedStackTemplates[logicalId].nestedStackTemplates,
-    hotswapPropertyOverrides);
+    hotswapPropertyOverrides,
+  );
 }
 
 /** Returns 'true' if a pair of changes is for the same resource. */
@@ -365,7 +367,7 @@ function makeRenameDifference(
 function isCandidateForHotswapping(
   change: cfn_diff.ResourceDifference,
   logicalId: string,
-): HotswappableChange | NonHotswappableChange | HotswappableChangeCandidate {
+): HotswapOperation | NonHotswappableChange | ResourceChange {
   // a resource has been removed OR a resource has been added; we can't short-circuit that change
   if (!change.oldValue) {
     return {
@@ -404,7 +406,7 @@ function isCandidateForHotswapping(
   };
 }
 
-async function applyAllHotswappableChanges(sdk: SDK, ioHelper: IoHelper, hotswappableChanges: HotswappableChange[]): Promise<void[]> {
+async function applyAllHotswappableChanges(sdk: SDK, ioHelper: IoHelper, hotswappableChanges: HotswapOperation[]): Promise<void[]> {
   if (hotswappableChanges.length > 0) {
     await ioHelper.notify(info(`\n${ICON} hotswapping resources:`));
   }
@@ -415,7 +417,7 @@ async function applyAllHotswappableChanges(sdk: SDK, ioHelper: IoHelper, hotswap
   })));
 }
 
-async function applyHotswappableChange(sdk: SDK, ioHelper: IoHelper, hotswapOperation: HotswappableChange): Promise<void> {
+async function applyHotswappableChange(sdk: SDK, ioHelper: IoHelper, hotswapOperation: HotswapOperation): Promise<void> {
   // note the type of service that was successfully hotswapped in the User-Agent
   const customUserAgent = `cdk-hotswap/success-${hotswapOperation.service}`;
   sdk.appendCustomUserAgent(customUserAgent);
