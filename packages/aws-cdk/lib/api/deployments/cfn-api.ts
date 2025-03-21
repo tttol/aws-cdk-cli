@@ -140,7 +140,6 @@ export type PrepareChangeSetOptions = {
   uuid: string;
   willExecute: boolean;
   sdkProvider: SdkProvider;
-  stream: NodeJS.WritableStream;
   parameters: { [name: string]: string | undefined };
   resourcesToImport?: ResourcesToImport;
 }
@@ -224,9 +223,9 @@ async function uploadBodyParameterAndCreateChangeSet(
     const exists = (await CloudFormationStack.lookup(cfn, options.stack.stackName, false)).exists;
 
     const executionRoleArn = await env.replacePlaceholders(options.stack.cloudFormationExecutionRoleArn);
-    options.stream.write(
+    await ioHelper.notify(IO.DEFAULT_TOOLKIT_INFO.msg(
       'Hold on while we create a read-only change set to get a diff with accurate replacement information (use --no-change-set to use a less accurate but faster template-only diff)\n',
-    );
+    ));
 
     return await createChangeSet(ioHelper, {
       cfn,
@@ -242,9 +241,9 @@ async function uploadBodyParameterAndCreateChangeSet(
     });
   } catch (e: any) {
     await ioHelper.notify(IO.DEFAULT_TOOLKIT_DEBUG.msg(e));
-    options.stream.write(
+    await ioHelper.notify(IO.DEFAULT_TOOLKIT_INFO.msg(
       'Could not create a change set, will base the diff on template differences (run again with -v to see the reason)\n',
-    );
+    ));
 
     return undefined;
   }
