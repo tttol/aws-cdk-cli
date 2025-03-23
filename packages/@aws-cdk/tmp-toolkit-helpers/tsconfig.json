@@ -11,7 +11,8 @@
     "inlineSources": true,
     "lib": [
       "es2022",
-      "esnext.disposable"
+      "esnext.disposable",
+      "dom"
     ],
     "module": "NodeNext",
     "noEmitOnError": false,
@@ -27,15 +28,13 @@
     "strictPropertyInitialization": true,
     "stripInternal": true,
     "target": "es2022",
+    "incremental": true,
+    "skipLibCheck": true,
     "composite": true
   },
   "include": [
     "src/**/*.ts"
   ],
   "exclude": [],
-  "references": [
-    {
-      "path": "../cdk-build-tools"
-    }
-  ]
+  "references": []
 }

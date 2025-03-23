@@ -1,18 +1,19 @@
 import * as os from 'os';
-import { ContextLookupRoleOptions } from '@aws-cdk/cloud-assembly-schema';
-import { Environment, EnvironmentUtils, UNKNOWN_ACCOUNT, UNKNOWN_REGION } from '@aws-cdk/cx-api';
-import { AssumeRoleCommandInput } from '@aws-sdk/client-sts';
+import type { ContextLookupRoleOptions } from '@aws-cdk/cloud-assembly-schema';
+import type { Environment } from '@aws-cdk/cx-api';
+import { EnvironmentUtils, UNKNOWN_ACCOUNT, UNKNOWN_REGION } from '@aws-cdk/cx-api';
+import type { AssumeRoleCommandInput } from '@aws-sdk/client-sts';
 import { fromTemporaryCredentials } from '@aws-sdk/credential-providers';
 import type { NodeHttpHandlerOptions } from '@smithy/node-http-handler';
-import { AwsCredentialIdentityProvider, Logger } from '@smithy/types';
+import type { AwsCredentialIdentityProvider, Logger } from '@smithy/types';
 import { AwsCliCompatible } from './awscli-compatible';
 import { cached } from './cached';
 import { CredentialPlugins } from './credential-plugins';
 import { makeCachingProvider } from './provider-caching';
 import { SDK } from './sdk';
 import { callTrace, traceMemberMethods } from './tracing';
+import { AuthenticationError } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api';
 import { debug, warning } from '../../logging';
-import { AuthenticationError } from '../../toolkit/error';
 import { formatErrorMessage } from '../../util';
 import { Mode } from '../plugin/mode';
 

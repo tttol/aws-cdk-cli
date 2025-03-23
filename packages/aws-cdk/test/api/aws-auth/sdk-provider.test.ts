@@ -13,7 +13,7 @@
  * calls and locally fake an STS Endpoint using the `FakeSts` class.
  */
 import * as os from 'os';
-import { bockfs } from '@aws-cdk/cdk-build-tools';
+import bockfs from '../../_helpers/bockfs';
 import * as cxapi from '@aws-cdk/cx-api';
 import * as fromEnv from '@aws-sdk/credential-provider-env';
 import * as promptly from 'promptly';
@@ -24,8 +24,8 @@ import { AwsCliCompatible } from '../../../lib/api/aws-auth/awscli-compatible';
 import { defaultCliUserAgent } from '../../../lib/api/aws-auth/user-agent';
 import { PluginHost } from '../../../lib/api/plugin';
 import { Mode } from '../../../lib/api/plugin/mode';
-import { CliIoHost } from '../../../lib/toolkit/cli-io-host';
-import { withMocked } from '../../util';
+import { CliIoHost } from '../../../lib/cli/io-host';
+import { withMocked } from '../../_helpers/as-mock';
 import { undoAllSdkMocks } from '../../util/mock-sdk';
 
 // As part of the imports above we import `mock-sdk.ts` which automatically mocks
@@ -741,7 +741,7 @@ function sdkConfig(sdk: SDK): ConfigurationOptions {
  */
 function prepareCreds(options: PrepareCredsOptions) {
   function convertSections(sections?: Record<string, ProfileUser | ProfileRole>) {
-    const ret = [];
+    const ret: string[] = [];
     for (const [profile, user] of Object.entries(sections ?? {})) {
       ret.push(`[${profile}]`);
 

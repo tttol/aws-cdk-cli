@@ -1,4 +1,5 @@
-import { CliConfig, renderUserInputType } from '../lib';
+import type { CliConfig } from '../lib';
+import { renderUserInputType } from '../lib';
 
 describe('render', () => {
   test('can generate UserInput type', async () => {
@@ -32,10 +33,12 @@ describe('render', () => {
       commands: {
         deploy: {
           description: 'Deploy a stack',
+          aliases: ['ship-it'],
           options: {
             all: {
               type: 'boolean',
               desc: 'Deploy all stacks',
+              alias: 'A',
               default: false,
             },
           },
@@ -48,7 +51,7 @@ describe('render', () => {
       // GENERATED FROM packages/aws-cdk/lib/cli/cli-config.ts.
       // Do not edit by hand; all changes will be overwritten at build time from the config file.
       // -------------------------------------------------------------------------------------------
-      /* eslint-disable @stylistic/max-len */
+      /* eslint-disable @stylistic/max-len, @typescript-eslint/consistent-type-imports */
       import { Command } from './user-configuration';
 
       /**
@@ -69,6 +72,8 @@ describe('render', () => {
 
         /**
          * Deploy a stack
+         *
+         * aliases: ship-it
          */
         readonly deploy?: DeployOptions;
       }
@@ -118,11 +123,15 @@ describe('render', () => {
       /**
        * Deploy a stack
        *
+       * aliases: ship-it
+       *
        * @struct
        */
       export interface DeployOptions {
         /**
          * Deploy all stacks
+         *
+         * aliases: A
          *
          * @default - false
          */
@@ -157,7 +166,7 @@ describe('render', () => {
       // GENERATED FROM packages/aws-cdk/lib/cli/cli-config.ts.
       // Do not edit by hand; all changes will be overwritten at build time from the config file.
       // -------------------------------------------------------------------------------------------
-      /* eslint-disable @stylistic/max-len */
+      /* eslint-disable @stylistic/max-len, @typescript-eslint/consistent-type-imports */
       import { Command } from './user-configuration';
 
       /**
@@ -239,7 +248,7 @@ describe('render', () => {
       // GENERATED FROM packages/aws-cdk/lib/cli/cli-config.ts.
       // Do not edit by hand; all changes will be overwritten at build time from the config file.
       // -------------------------------------------------------------------------------------------
-      /* eslint-disable @stylistic/max-len */
+      /* eslint-disable @stylistic/max-len, @typescript-eslint/consistent-type-imports */
       import { Command } from './user-configuration';
 
       /**

@@ -1,10 +1,6 @@
-import type { CloudFormationStackArtifact } from '@aws-cdk/cx-api';
 import type { BaseDeployOptions } from './private/deploy-options';
 import type { Tag } from '../../api/aws-cdk';
-import type { ConfirmationRequest } from '../../toolkit/types';
-import type { PermissionChangeType } from '../diff';
-
-export type { StackMonitoringControlEvent, StackActivity } from '../../api/aws-cdk';
+import type { RequireApproval } from '../../api/shared-public';
 
 export type DeploymentMethod = DirectDeploymentMethod | ChangeSetDeploymentMethod;
 
@@ -51,24 +47,6 @@ export enum AssetBuildTime {
    * Build assets just-in-time, before publishing
    */
   JUST_IN_TIME = 'just-in-time',
-}
-
-/**
- * @deprecated
- */
-export enum RequireApproval {
-  /**
-   * Never require any security approvals
-   */
-  NEVER = 'never',
-  /**
-   * Any security changes require an approval
-   */
-  ANY_CHANGE = 'any-change',
-  /**
-   * Require approval only for changes that are access broadening
-   */
-  BROADENING = 'broadening',
 }
 
 export enum HotswapMode {
@@ -216,32 +194,4 @@ export interface HotswapProperties {
    * ECS specific hotswap property overrides
    */
   readonly ecs: EcsHotswapProperties;
-}
-
-export interface StackDeployProgress {
-  /**
-   * The total number of stacks being deployed
-   */
-  readonly total: number;
-  /**
-   * The count of the stack currently attempted to be deployed
-   *
-   * This is counting value, not an identifier.
-   */
-  readonly current: number;
-  /**
-   * The stack that's currently being deployed
-   */
-  readonly stack: CloudFormationStackArtifact;
-}
-
-/**
- * Payload for a yes/no confirmation in deploy. Includes information on
- * what kind of change is being made.
- */
-export interface DeployConfirmationRequest extends ConfirmationRequest {
-  /**
-   * The type of change being made to the IAM permissions.
-   */
-  readonly permissionChangeType: PermissionChangeType;
 }

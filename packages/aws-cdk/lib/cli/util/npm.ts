@@ -1,6 +1,9 @@
 import { exec as _exec } from 'child_process';
 import { promisify } from 'util';
-import { ToolkitError } from '../../toolkit/error';
+import * as semver from 'semver';
+import { ToolkitError } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api';
+import { debug } from '../../logging';
+
 const exec = promisify(_exec);
 
 export async function execNpmView(currentVersion: string) {

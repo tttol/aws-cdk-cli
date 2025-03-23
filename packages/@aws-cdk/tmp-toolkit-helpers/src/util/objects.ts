@@ -103,6 +103,11 @@ export function deepSet(x: any, path: string[], value: any) {
 
   while (path.length > 1 && isObject(x)) {
     const key = path.shift()!;
+
+    if (isPrototypePollutingKey(key)) {
+      continue;
+    }
+
     if (!(key in x)) {
       x[key] = {};
     }
@@ -113,11 +118,27 @@ export function deepSet(x: any, path: string[], value: any) {
     throw new ToolkitError(`Expected an object, got '${x}'`);
   }
 
-  if (value !== undefined) {
-    x[path[0]] = value;
-  } else {
-    delete x[path[0]];
+  const finalKey = path[0];
+
+  if (isPrototypePollutingKey(finalKey)) {
+    return;
   }
+
+  if (value !== undefined) {
+    x[finalKey] = value;
+  } else {
+    delete x[finalKey];
+  }
+}
+
+/**
+ * Helper to detect prototype polluting keys
+ *
+ * A key matching this, MUST NOT be used in an assignment.
+ * Use this to check user-input.
+ */
+function isPrototypePollutingKey(key: string) {
+  return key === '__proto__' || key === 'constructor' || key === 'prototype';
 }
 
 /**
@@ -131,7 +152,7 @@ export function deepSet(x: any, path: string[], value: any) {
 export function deepMerge(...objects: Array<Obj<any> | undefined>) {
   function mergeOne(target: Obj<any>, source: Obj<any>) {
     for (const key of Object.keys(source)) {
-      if (key === '__proto__' || key === 'constructor') {
+      if (isPrototypePollutingKey(key)) {
         continue;
       }
 
@@ -193,4 +214,36 @@ export function splitBySize(data: any, maxSizeBytes: number): [any, any] {
       Object.fromEntries(entries.slice(index)),
     ];
   }
+}
+
+type Exclude = { [key: string]: Exclude | true };
+
+/**
+ * This function transforms all keys (recursively) in the provided `val` object.
+ *
+ * @param val The object whose keys need to be transformed.
+ * @param transform The function that will be applied to each key.
+ * @param exclude The keys that will not be transformed and copied to output directly
+ * @returns A new object with the same values as `val`, but with all keys transformed according to `transform`.
+ */
+export function transformObjectKeys(val: any, transform: (str: string) => string, exclude: Exclude = {}): any {
+  if (val == null || typeof val !== 'object') {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    // For arrays we just pass parent's exclude object directly
+    // since it makes no sense to specify different exclude options for each array element
+    return val.map((input: any) => transformObjectKeys(input, transform, exclude));
+  }
+  const ret: { [k: string]: any } = {};
+  for (const [k, v] of Object.entries(val)) {
+    const childExclude = exclude[k];
+    if (childExclude === true) {
+      // we don't transform this object if the key is specified in exclude
+      ret[transform(k)] = v;
+    } else {
+      ret[transform(k)] = transformObjectKeys(v, transform, childExclude);
+    }
+  }
+  return ret;
 }

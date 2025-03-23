@@ -1,8 +1,8 @@
 import type { CcApiContextQuery } from '@aws-cdk/cloud-assembly-schema';
-import { ICloudControlClient } from '../api';
+import { ContextProviderError } from '../../../@aws-cdk/tmp-toolkit-helpers/src/api';
+import type { ICloudControlClient } from '../api';
 import { type SdkProvider, initContextProviderSdk } from '../api/aws-auth/sdk-provider';
-import { ContextProviderPlugin } from '../api/plugin';
-import { ContextProviderError } from '../toolkit/error';
+import type { ContextProviderPlugin } from '../api/plugin';
 import { findJsonValue, getResultObj } from '../util';
 
 export class CcApiContextProviderPlugin implements ContextProviderPlugin {

@@ -1,14 +1,16 @@
-import { LoadBalancerContextQuery, LoadBalancerListenerContextQuery } from '@aws-cdk/cloud-assembly-schema';
-import {
+import type { LoadBalancerContextQuery, LoadBalancerListenerContextQuery } from '@aws-cdk/cloud-assembly-schema';
+import type {
   LoadBalancerContextResponse,
-  LoadBalancerIpAddressType,
   LoadBalancerListenerContextResponse,
 } from '@aws-cdk/cx-api';
-import { type Listener, LoadBalancer, type TagDescription } from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  LoadBalancerIpAddressType,
+} from '@aws-cdk/cx-api';
+import type { LoadBalancer, Listener, TagDescription } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { ContextProviderError } from '../../../@aws-cdk/tmp-toolkit-helpers/src/api';
 import type { IElasticLoadBalancingV2Client } from '../api';
 import { type SdkProvider, initContextProviderSdk } from '../api/aws-auth/sdk-provider';
-import { ContextProviderPlugin } from '../api/plugin';
-import { ContextProviderError } from '../toolkit/error';
+import type { ContextProviderPlugin } from '../api/plugin';
 
 /**
  * Provides load balancer context information.

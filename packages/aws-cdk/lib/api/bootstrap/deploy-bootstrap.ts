@@ -1,19 +1,20 @@
 import * as os from 'os';
 import * as path from 'path';
 import { ArtifactType } from '@aws-cdk/cloud-assembly-schema';
-import { CloudAssemblyBuilder, Environment, EnvironmentUtils } from '@aws-cdk/cx-api';
+import type { Environment } from '@aws-cdk/cx-api';
+import { CloudAssemblyBuilder, EnvironmentUtils } from '@aws-cdk/cx-api';
 import * as fs from 'fs-extra';
+import type { BootstrapEnvironmentOptions } from './bootstrap-props';
 import {
   BOOTSTRAP_VARIANT_PARAMETER,
   BOOTSTRAP_VERSION_OUTPUT,
   BOOTSTRAP_VERSION_RESOURCE,
-  BootstrapEnvironmentOptions,
   DEFAULT_BOOTSTRAP_VARIANT,
 } from './bootstrap-props';
-import { IoHelper } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
-import { warn } from '../../cli/messages';
+import { IO, type IoHelper } from '../../../../@aws-cdk/tmp-toolkit-helpers/src/api/io/private';
 import type { SDK, SdkProvider } from '../aws-auth';
-import { assertIsSuccessfulDeployStackResult, SuccessfulDeployStackResult } from '../deployments';
+import type { SuccessfulDeployStackResult } from '../deployments';
+import { assertIsSuccessfulDeployStackResult } from '../deployments';
 import { deployStack } from '../deployments/deploy-stack';
 import { NoBootstrapStackEnvironmentResources } from '../environment';
 import { Mode } from '../plugin/mode';
@@ -88,7 +89,7 @@ export class BootstrapStack {
       const currentVariant = this.currentToolkitInfo.variant;
       const newVariant = bootstrapVariantFromTemplate(template);
       if (currentVariant !== newVariant) {
-        await this.ioHelper.notify(warn(
+        await this.ioHelper.notify(IO.DEFAULT_TOOLKIT_WARN.msg(
           `Bootstrap stack already exists, containing '${currentVariant}'. Not overwriting it with a template containing '${newVariant}' (use --force if you intend to overwrite)`,
         ));
         return abortResponse;
@@ -98,13 +99,13 @@ export class BootstrapStack {
       const newVersion = bootstrapVersionFromTemplate(template);
       const currentVersion = this.currentToolkitInfo.version;
       if (newVersion < currentVersion) {
-        await this.ioHelper.notify(warn(
+        await this.ioHelper.notify(IO.DEFAULT_TOOLKIT_WARN.msg(
           `Bootstrap stack already at version ${currentVersion}. Not downgrading it to version ${newVersion} (use --force if you intend to downgrade)`,
         ));
         if (newVersion === 0) {
           // A downgrade with 0 as target version means we probably have a new-style bootstrap in the account,
           // and an old-style bootstrap as current target, which means the user probably forgot to put this flag in.
-          await this.ioHelper.notify(warn(
+          await this.ioHelper.notify(IO.DEFAULT_TOOLKIT_WARN.msg(
             "(Did you set the '@aws-cdk/core:newStyleStackSynthesis' feature flag in cdk.json?)",
           ));
         }
